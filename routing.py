@@ -29,7 +29,15 @@ TARGET_SCORES = {1: 90, 2: 70, 3: None}
 # collisions. The first qualifying weight is then refined by bisection.
 CANDIDATE_ALPHAS = (0.05, 0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.5, 2, 3, 5, 8, 13, 20, 40)
 REFINE_STEPS = 4
-PROJECT = Transformer.from_crs(4326, 26917, always_xy=True)
+# Bike parking near the destination (the yellow leg). A destination with a spot within
+# PARKING_AT_DESTINATION_M of the pin needs no separate path. Otherwise the nearest spot by
+# riding distance within PARKING_SEARCH_M wins. A spot joins the street network only if a
+# street node lies within PARKING_SNAP_M; the last stretch is a straight connector.
+PARKING_AT_DESTINATION_M = 30.0
+PARKING_SEARCH_M = 1500.0
+PARKING_SNAP_M = 90.0
+SPEED_MPS = 14000 / 3600
+PROJECT =Transformer.from_crs(4326, 26917, always_xy=True)
 
 
 @dataclass(frozen=True)
@@ -138,7 +146,7 @@ class RouteError(ValueError):
 
 
 class Router:
-    def __init__(self, graph, records, metadata=None):
+    def __init__(self, graph, records, metadata=None, parking=None):
         self.graph = graph
         self.records = {r.id: r for r in records}
         self.metadata = dict(metadata or {})
@@ -153,6 +161,23 @@ class Router:
         self.metadata["routing_model"] = {"version": SELECTION_VERSION, "risk_penalty_m": RISK_PENALTY_M,
                                           "normalization_peak": self.risk_scale}
         self.points = [record.public() for record in records]
+        self._index_parking(parking)
+
+    def _index_parking(self, parking):
+        """Keep every spot for the at-destination check, and attach each to its nearest street node."""
+        self.parking = list(parking or [])
+        self.parking_enabled = bool(self.parking)
+        self.parking_tree = None
+        self._spots_by_node = {}
+        if not self.parking:
+            return
+        xs, ys = PROJECT.transform([s["lng"] for s in self.parking], [s["lat"] for s in self.parking])
+        points = list(zip(xs, ys))
+        self.parking_tree = cKDTree(points)
+        distances, indexes = self.tree.query(points, distance_upper_bound=PARKING_SNAP_M)
+        for spot_index, (metres, node_index) in enumerate(zip(distances, indexes)):
+            if node_index < len(self.nodes):
+                self._spots_by_node.setdefault(self.nodes[node_index], []).append((spot_index, float(metres)))
 
     def _raw_risk(self, hour):
         return {n: sum((3.0 if self.records[i].fatal else 1.0) * time_weight(self.records[i].hour, hour)
@@ -173,6 +198,64 @@ class Router:
             raise RouteError("Choose points inside the downtown coverage area, closer to a street.")
         return self.nodes[index]
 
+    def _trace(self, path, edge_cost):
+        """Coordinates and length of a node path, using the cheapest of any parallel edges."""
+        coordinates = []
+        length = 0.0
+        for u, v in zip(path, path[1:]):
+            data = min(self.graph[u][v].values(), key=lambda d: edge_cost(v, d))
+            length += data["length"]
+            source = (self.graph.nodes[u]["x"], self.graph.nodes[u]["y"])
+            target = (self.graph.nodes[v]["x"], self.graph.nodes[v]["y"])
+            segment = list(data["geometry"].coords) if data.get("geometry") is not None else [source, target]
+            if math.dist(segment[-1], source) < math.dist(segment[0], source):
+                segment.reverse()
+            coordinates.extend(segment if not coordinates else segment[1:])
+        if not coordinates:
+            node = self.graph.nodes[path[0]]
+            coordinates = [(node["x"], node["y"])] * 2
+        return coordinates, length
+
+    def _parking(self, end, destination):
+        """The bike parking to use at the destination, or None when there is no parking data.
+
+        Independent of riding style and hour: it never changes the blue routes. A spot within
+        PARKING_AT_DESTINATION_M of the pin means no separate path. Otherwise the nearest spot
+        by riding distance from the destination's street node, with the path to it.
+        """
+        if not self.parking_enabled:
+            return None
+        pin = PROJECT.transform(destination[1], destination[0])
+        metres, index = self.parking_tree.query(pin, distance_upper_bound=PARKING_AT_DESTINATION_M)
+        if index < len(self.parking):
+            return {"at_destination": True, "spot": dict(self.parking[index]),
+                    "distance_m": round(float(metres), 1), "duration_s": round(metres / SPEED_MPS),
+                    "geometry": None}
+
+        def length(u, v, edges):
+            return min(float(data["length"]) for data in edges.values())
+
+        reach, paths = nx.single_source_dijkstra(self.graph, end, cutoff=PARKING_SEARCH_M, weight=length)
+        best = None
+        for node, ridden in reach.items():
+            for spot_index, connector in self._spots_by_node.get(node, ()):
+                total = ridden + connector
+                if total <= PARKING_SEARCH_M and (best is None or (total, spot_index) < best[:2]):
+                    best = (total, spot_index, node)
+        if best is None:
+            return {"at_destination": False, "spot": None, "distance_m": None,
+                    "duration_s": None, "geometry": None}
+        total, spot_index, node = best
+        spot = self.parking[spot_index]
+        coordinates, _ = self._trace(paths[node], lambda v, data: float(data["length"]))
+        line = []
+        for point in [*coordinates, (spot["lng"], spot["lat"])]:
+            if not line or list(point) != line[-1]:
+                line.append(list(point))
+        return {"at_destination": False, "spot": dict(spot), "distance_m": round(total, 1),
+                "duration_s": round(total / SPEED_MPS),
+                "geometry": {"type": "LineString", "coordinates": line}}
+
     def _route(self, start, end, alpha, hour):
         return self._route_with_path(start, end, alpha, hour)[0]
 
@@ -188,20 +271,7 @@ class Router:
             path = nx.shortest_path(self.graph, start, end, weight=weight, method="dijkstra")
         except (nx.NetworkXNoPath, nx.NodeNotFound) as exc:
             raise RouteError("No cycling route between those points. Try moving one closer to a street.") from exc
-        coordinates = []
-        length = 0.0
-        for u, v in zip(path, path[1:]):
-            data = min(self.graph[u][v].values(), key=lambda d: edge_cost(v, d))
-            length += data["length"]
-            source = (self.graph.nodes[u]["x"], self.graph.nodes[u]["y"])
-            target = (self.graph.nodes[v]["x"], self.graph.nodes[v]["y"])
-            segment = list(data["geometry"].coords) if data.get("geometry") is not None else [source, target]
-            if math.dist(segment[-1], source) < math.dist(segment[0], source):
-                segment.reverse()
-            coordinates.extend(segment if not coordinates else segment[1:])
-        if not coordinates:
-            node = self.graph.nodes[start]
-            coordinates = [(node["x"], node["y"])] * 2
+        coordinates, length = self._trace(path, edge_cost)
         ids = set().union(*(set(self.graph.nodes[n].get("collision_ids", [])) for n in path))
         route = {"geometry": {"type": "LineString", "coordinates": coordinates},
                  "distance_m": round(length, 1), "duration_s": round(length / (14000 / 3600)),
@@ -272,6 +342,7 @@ class Router:
         for route in (direct, chosen):
             route.pop("_path", None)
         return {"direct": direct, "safer": chosen, "selection": selection,
+                "parking": self._parking(end, destination),
                 "risk_points": self.points,
                 "snapped": {"origin": [self.graph.nodes[start]["y"], self.graph.nodes[start]["x"]],
                             "destination": [self.graph.nodes[end]["y"], self.graph.nodes[end]["x"]]},

@@ -49,6 +49,16 @@ Never fabricate collision statistics.
   sign-in button in `static/nav-auth.js`; the Rentals page wires the same button ids in
   `rentals.js`. Keep the button wording ("Sign in with Google", "Sign out",
   "Unavailable") the same in both.
+- **Bike thefts and the yellow parking leg.** The map plots Toronto Police bike
+  thefts (`static/bike-thefts.json`, coordinates + year + premises only: never
+  publish the event id) and every route response carries `parking`: the nearest bike
+  parking by riding distance from the destination (`routing.py`, `_parking`),
+  drawn yellow under the blue route. A spot within 30 m of the destination pin
+  means no separate path. Parking must never change the blue routes, their scores,
+  or the riding-style selection (`tests/test_parking.py` enforces it). Keep parking
+  layers out of `state.routes`. The data files come from
+  `scripts/build_bike_data.py`; keep the Open Government Licence – Ontario credit
+  and the "not a theft rate" caveat visible.
 - There is **no time-of-day control and no forecasting**. The website always sends
   the current Toronto hour, read fresh on every request; the API `hour` field and
   the model's hour weighting remain.

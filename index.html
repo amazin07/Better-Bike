@@ -33,6 +33,9 @@
         --muted: #6b7178;
         --blue: #14467d;
         --red: #c1272d;
+        --yellow: #f2b705;
+        --yellow-edge: #5c4300;
+        --theft: #6b3fa0;
         --line: #e3e3df;
       }
       * {
@@ -548,6 +551,36 @@
         color: var(--muted);
         border-top: 1px solid var(--line);
       }
+      /* The yellow leg: from the destination to the nearest bike parking. */
+      .parking-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 22px;
+        font-size: 12px;
+        line-height: 1.5;
+        border-top: 1px solid var(--line);
+      }
+      .parking-note[hidden] {
+        display: none;
+      }
+      .park-badge,
+      .parking-pin {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 5px;
+        background: var(--yellow);
+        border: 2px solid var(--yellow-edge);
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 16px;
+        text-align: center;
+      }
+      .parking-pin {
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+      }
       .comparison-note {
         padding: 14px 22px 17px;
         font-size: 10px;
@@ -610,6 +643,24 @@
       .legend-safer {
         width: 23px;
         border-top: 3px solid var(--blue);
+      }
+      .legend-parking {
+        width: 23px;
+        border-top: 3px solid var(--yellow);
+        box-shadow: 0 1px 0 var(--yellow-edge);
+      }
+      .legend-theft {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(107, 63, 160, 0.55);
+      }
+      .legend-toggle {
+        cursor: pointer;
+      }
+      .legend-toggle input {
+        margin: 0;
+        accent-color: var(--theft);
       }
       .map-notice {
         position: absolute;
@@ -846,6 +897,11 @@
           font-size: 13px;
         }
         .selection-note {
+          grid-column: 1/-1;
+          padding: 7px 16px;
+          font-size: 11px;
+        }
+        .parking-note {
           grid-column: 1/-1;
           padding: 7px 16px;
           font-size: 11px;
@@ -1128,6 +1184,10 @@
           </section>
           <div class="delta" id="delta"></div>
           <div class="selection-note" id="selection-note"></div>
+          <div class="parking-note" id="parking-note" hidden>
+            <span class="park-badge" aria-hidden="true">P</span>
+            <span id="parking-text"></span>
+          </div>
           <div class="comparison-note">
             KSI = killed or seriously injured. Counts are distinct reported
             collisions, across
@@ -1147,6 +1207,13 @@
         ><span class="legend-direct"></span>Direct route</span
       ><span class="legend-item"
         ><span class="legend-safer"></span>Your route</span
+      ><span class="legend-item"
+        ><span class="legend-parking"></span>To bike parking</span
+      ><label class="legend-item legend-toggle"
+        ><input type="checkbox" id="theft-toggle" checked autocomplete="off" /><span
+          class="legend-theft"
+        ></span
+        >Bike theft</label
       >
     </aside>
     <div class="map-notice" id="map-notice" role="status" hidden></div>
@@ -1164,11 +1231,13 @@
         level: 2,
         markers: [],
         routes: [],
+        parking: [],
         points: [],
+        thefts: [],
         request: 0,
         controller: null,
       };
-      let map, collisionLayer, routeTimer;
+      let map, collisionLayer, theftLayer, routeTimer;
       let trafficLayer, incidentLayer, trafficRenderer;
       const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
       // "Now" is Toronto time, whatever the viewer's device clock says. There is
@@ -1254,6 +1323,66 @@
       function clearRoutes() {
         state.routes.forEach((layer) => map.removeLayer(layer));
         state.routes = [];
+        state.parking.forEach((layer) => map.removeLayer(layer));
+        state.parking = [];
+        $("parking-note").hidden = true;
+      }
+      // The yellow leg. It lives in state.parking, apart from state.routes, so the two
+      // route lines stay the only entries there. It is drawn wide and beneath the blue
+      // route: where the two share a street, the blue stays visible with yellow edges.
+      const PARKING_KINDS = {
+        ring: "bike ring",
+        rack: "bike rack",
+        large: "high-capacity outdoor bike parking",
+        station: "indoor bike station",
+      };
+      const shortDistance = (m) =>
+        m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+      function parkingText(parking) {
+        if (!parking.spot)
+          return "No bike parking found within 1.5 km of your destination.";
+        const kind = PARKING_KINDS[parking.spot.kind] || "bike parking";
+        const room = parking.spot.capacity
+          ? `, room for ${parking.spot.capacity} bikes`
+          : "";
+        if (parking.at_destination)
+          return `Bike parking at your destination: a ${kind}${room}, ${Math.round(parking.distance_m)} m from your pin.`;
+        const minutes = Math.round(parking.duration_s / 60);
+        const time = minutes < 1 ? "<1 min" : `${minutes} min`;
+        return `Nearest bike parking (yellow path): a ${kind}${room}, ${shortDistance(parking.distance_m)} from your destination, about ${time} by bike.`;
+      }
+      function drawParking(parking) {
+        if (!parking) {
+          $("parking-note").hidden = true;
+          return;
+        }
+        $("parking-text").textContent = parkingText(parking);
+        $("parking-note").hidden = false;
+        if (!parking.spot) return;
+        if (parking.geometry)
+          for (const style of [
+            { color: "#5c4300", weight: 13, opacity: 0.5 },
+            { color: "#f2b705", weight: 10, opacity: 1 },
+          ])
+            state.parking.push(
+              L.geoJSON(parking.geometry, {
+                pane: "parking",
+                style: { ...style, lineCap: "round", lineJoin: "round" },
+              }).addTo(map),
+            );
+        state.parking.push(
+          L.marker([parking.spot.lat, parking.spot.lng], {
+            icon: L.divIcon({
+              className: "parking-pin",
+              html: "P",
+              iconSize: [20, 20],
+              iconAnchor: [10, 10],
+            }),
+            title: "Bike parking",
+            alt: "Bike parking",
+            zIndexOffset: 900,
+          }).addTo(map),
+        );
       }
       function cancelRoute() {
         clearTimeout(routeTimer);
@@ -1325,6 +1454,28 @@
               { direction: "top" },
             )
             .addTo(collisionLayer);
+        }
+      }
+      // Bicycle thefts reported to the Toronto Police Service, drawn in the map's
+      // current view like the collisions. The Bike theft switch shows or hides them.
+      function renderThefts() {
+        if (!map) return;
+        theftLayer.clearLayers();
+        if (!$("theft-toggle").checked) return;
+        const bounds = map.getBounds();
+        for (const [lat, lng, year, premises] of state.thefts) {
+          if (!bounds.contains([lat, lng])) continue;
+          const label = document.createElement("span");
+          label.textContent = `Bike theft · ${year ?? "year unknown"} · ${premises}`;
+          L.circleMarker([lat, lng], {
+            pane: "thefts",
+            radius: 4.5,
+            stroke: false,
+            fillColor: "#6b3fa0",
+            fillOpacity: 0.32,
+          })
+            .bindTooltip(label, { direction: "top" })
+            .addTo(theftLayer);
         }
       }
       function applyMetadata(metadata) {
@@ -1423,10 +1574,14 @@
             data.selection,
             state.level,
           );
+          drawParking(data.parking);
           show("results");
           applyMetadata(data.metadata);
           if (fit) {
-            const bounds = L.featureGroup(state.routes).getBounds();
+            const bounds = L.featureGroup([
+              ...state.routes,
+              ...state.parking,
+            ]).getBounds();
             if (innerWidth > 760)
               map.fitBounds(bounds, {
                 paddingTopLeft: [
@@ -1725,16 +1880,22 @@
         for (const [name, zIndex] of [
           ["traffic", 405],
           ["collisions", 410],
+          ["thefts", 412],
           ["direct", 420],
+          ["parking", 425],
           ["safer", 430],
           ["incidents", 440],
         ])
           map.createPane(name).style.zIndex = zIndex;
         collisionLayer = L.layerGroup().addTo(map);
+        theftLayer = L.layerGroup().addTo(map);
         trafficLayer = L.layerGroup().addTo(map);
         incidentLayer = L.layerGroup().addTo(map);
         trafficRenderer = L.canvas({ pane: "traffic" });
         map.on("moveend", renderCollisions);
+        map.on("moveend", renderThefts);
+        $("theft-toggle").checked = true;
+        $("theft-toggle").addEventListener("change", renderThefts);
         map.on("click", (event) => {
           document
             .querySelectorAll(".suggestions")
@@ -1883,6 +2044,20 @@
           notice(
             "Collision data is unavailable. Run the data setup before your ride.",
           );
+        }
+        try {
+          const response = await fetch("/static/bike-thefts.json");
+          if (!response.ok) throw new Error();
+          const data = await response.json();
+          state.thefts = data.points;
+          map.attributionControl.addAttribution(
+            "Bike theft: Toronto Police Service, Open Government Licence – Ontario · Bike parking: City of Toronto Open Data",
+          );
+          renderThefts();
+        } catch {
+          $("theft-toggle").disabled = true;
+          $("theft-toggle").checked = false;
+          $("theft-toggle").title = "Bike theft data is unavailable.";
         }
         try {
           const health = await fetch("/api/health");

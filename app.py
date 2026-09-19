@@ -9,6 +9,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
+from bikedata import load_parking
 from routing import Collision, RouteError, Router
 from scoring import safety_score
 from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
@@ -67,7 +68,8 @@ def create_app(router=None, cache_path=None, traffic=None):
         try:
             with path.open("rb") as source:
                 bundle = pickle.load(source)
-            router = Router(bundle["graph"], [Collision(**row) for row in bundle["records"]], bundle["metadata"])
+            router = Router(bundle["graph"], [Collision(**row) for row in bundle["records"]], bundle["metadata"],
+                            parking=load_parking(ROOT / "static/bike-parking.json"))
         except (OSError, ValueError, KeyError, pickle.UnpicklingError, EOFError):
             logging.exception("Routing cache unavailable. Run prepare_data.py, then restart Flask.")
 
