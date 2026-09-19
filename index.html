@@ -583,6 +583,13 @@
         border-top: 1px solid var(--line);
         color: var(--blue);
       }
+      .selection-note {
+        padding: 12px 22px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+        border-top: 1px solid var(--line);
+      }
       .comparison-note {
         padding: 14px 22px 17px;
         font-size: 10px;
@@ -888,6 +895,11 @@
           padding: 9px 16px;
           font-size: 13px;
         }
+        .selection-note {
+          grid-column: 1/-1;
+          padding: 7px 16px;
+          font-size: 11px;
+        }
         .comparison-note {
           grid-column: 1/-1;
           font-size: 9px;
@@ -937,17 +949,6 @@
       }
       .osm-basemap {
         filter: saturate(0.12) contrast(0.86) brightness(1.08);
-      }
-      .compact-label {
-        display: none;
-      }
-      @media (max-width: 760px) {
-        .full-label {
-          display: none;
-        }
-        .compact-label {
-          display: inline;
-        }
       }
       @media (prefers-reduced-motion: reduce) {
         *,
@@ -1056,36 +1057,13 @@
         <div class="preferences" id="preferences">
           <section class="section">
             <div class="section-heading"><h2>Your riding style</h2></div>
-            <div
-              class="rider-levels"
-              role="group"
-              aria-label="Rider confidence"
-            >
-              <button
-                data-level="1"
-                aria-pressed="false"
-                aria-label="New to city riding"
-              >
-                <span class="full-label">New to<br />city riding</span
-                ><span class="compact-label">New rider</span>
-              </button>
-              <button
-                data-level="2"
-                aria-pressed="true"
-                aria-label="Comfortable"
-              >
-                Comfortable
-              </button>
-              <button
-                data-level="3"
-                aria-pressed="false"
-                aria-label="Confident commuter"
-              >
-                Confident<br />commuter
-              </button>
+            <div class="rider-levels" role="group" aria-label="Riding style">
+              <button data-level="1" aria-pressed="false">Beginner</button>
+              <button data-level="2" aria-pressed="true">Intermediate</button>
+              <button data-level="3" aria-pressed="false">Confident</button>
             </div>
             <p class="rider-copy" id="rider-copy">
-              Balance calm streets against time.
+              Shortest route that scores above 70.
             </p>
           </section>
         </div>
@@ -1217,6 +1195,7 @@
             <div class="number-caption" id="safer-caption"></div>
           </section>
           <div class="delta" id="delta"></div>
+          <div class="selection-note" id="selection-note"></div>
           <div class="comparison-note">
             KSI = killed or seriously injured. Counts are distinct reported
             collisions, across
@@ -1300,6 +1279,31 @@
         const count = route.ksi_total;
         $(`${key}-caption`).textContent =
           `${count.toLocaleString()} recorded cyclist KSI collision${count === 1 ? "" : "s"} along this path`;
+      }
+      const STYLE_NAMES = { 1: "Beginner", 2: "Intermediate", 3: "Confident" };
+      const STYLE_COPY = {
+        1: "Shortest route that scores above 90, if one exists.",
+        2: "Shortest route that scores above 70.",
+        3: "Always the fastest route, whatever its score.",
+      };
+      // Says in plain words how the route was chosen, including when nothing qualified.
+      function selectionNote(selection, level) {
+        if (!selection) return "";
+        if (selection.target === null)
+          return "Confident: the fastest route, whatever its safety score.";
+        const name = STYLE_NAMES[level];
+        const extra = selection.extra_distance_m;
+        if (!selection.met)
+          return `${name}: no route scores above ${selection.target} here, so this is the safest one we found.`;
+        if (selection.same_route)
+          return `${name}: the fastest route already scores above ${selection.target}.`;
+        if (extra < 1)
+          return `${name}: a route as short as the fastest that scores above ${selection.target}.`;
+        const longer =
+          extra < 1000
+            ? `${Math.round(extra)} m`
+            : `${(extra / 1000).toFixed(1)} km`;
+        return `${name}: the shortest route we found scoring above ${selection.target}, ${longer} longer than the fastest.`;
       }
       const reducedMotion = matchMedia(
         "(prefers-reduced-motion: reduce)",
@@ -1483,6 +1487,10 @@
           else if (direct === 0)
             difference = "No recorded collisions on either path";
           $("delta").textContent = `${time} · ${difference}`;
+          $("selection-note").textContent = selectionNote(
+            data.selection,
+            state.level,
+          );
           show("results");
           applyMetadata(data.metadata);
           if (fit) {
@@ -1830,11 +1838,7 @@
               .forEach((b) =>
                 b.setAttribute("aria-pressed", String(b === button)),
               );
-            $("rider-copy").textContent = {
-              1: "Quiet streets, even if it takes longer.",
-              2: "Balance calm streets against time.",
-              3: "Prioritize a shorter ride, with some weight on collision history.",
-            }[state.level];
+            $("rider-copy").textContent = STYLE_COPY[state.level];
             reroute();
           }),
         );

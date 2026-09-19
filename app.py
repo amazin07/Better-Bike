@@ -122,18 +122,20 @@ def create_app(router=None, cache_path=None, traffic=None):
             return jsonify(error=str(error)), 400
         if not router:
             return jsonify(error="Routing is unavailable. The collision map is still shown below."), 503
+        # Live traffic joins the score only when the client asks (its Live traffic switch is on)
+        # and the server already holds fresh data. This never calls HERE. The same score both
+        # picks the route for beginner and intermediate riders and is shown on the cards.
+        index = traffic.congestion_index() if payload.get("traffic") else None
+
+        def score(path):
+            share = index.share(path["geometry"]["coordinates"]) if index is not None else None
+            return safety_score(path["ksi_total"], path["ksi_fatal"], path["distance_m"], share)
+
         try:
             result = router.route(payload["origin"], payload["destination"],
-                                  payload["level"], payload["hour"])
+                                  payload["level"], payload["hour"], score_fn=score)
         except RouteError as error:
             return jsonify(error=str(error)), 422
-        # Live traffic joins the score only when the client asks (its Live traffic switch is on)
-        # and the server already holds fresh data. This never calls HERE.
-        index = traffic.congestion_index() if payload.get("traffic") else None
-        for key in ("direct", "safer"):
-            path = result[key]
-            share = index.share(path["geometry"]["coordinates"]) if index is not None else None
-            path["safety"] = safety_score(path["ksi_total"], path["ksi_fatal"], path["distance_m"], share)
         result["traffic_used"] = index is not None
         return jsonify(result)
 

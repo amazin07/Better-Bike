@@ -11,12 +11,24 @@ import networkx as nx
 from pyproj import Transformer
 from scipy.spatial import cKDTree
 
+from scoring import safety_score
+
 CENTER = (43.6629, -79.3957)
 ALPHAS = {1: 0.9, 2: 0.5, 3: 0.2}
 # Heuristic metres of lane-weighted distance at maximum normalized node risk.
 # Keep infrastructure discounts strong; do not discount the collision penalty.
 RISK_PENALTY_M = 600.0
-MODEL_VERSION = "lane-priority-node-penalty-v2"
+MODEL_VERSION = "lane-priority-node-penalty-v2"   # the old lane-weighted cost; scripts/evaluate_routing.py
+SELECTION_VERSION = "score-threshold-v3"          # what Router.route does now
+# Riding style (the request's `level`) -> the safety score a route must beat. Confident
+# riders (None) always get the fastest route, whatever its score. Beginner and
+# Intermediate riders get the shortest route whose score is strictly above the target.
+TARGET_SCORES = {1: 90, 2: 70, 3: None}
+# Collision-penalty weights tried, in order, while hunting for a route that qualifies.
+# Weight 0 is the fastest route; each larger weight detours further to avoid recorded
+# collisions. The first qualifying weight is then refined by bisection.
+CANDIDATE_ALPHAS = (0.05, 0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.5, 2, 3, 5, 8, 13, 20, 40)
+REFINE_STEPS = 4
 PROJECT = Transformer.from_crs(4326, 26917, always_xy=True)
 
 
@@ -138,7 +150,7 @@ class Router:
         self.risk_scale = max((max(values.values(), default=0) for values in raw_risks.values()), default=0) or 1
         self.risks = {hour: {node: value / self.risk_scale for node, value in values.items()}
                       for hour, values in raw_risks.items()}
-        self.metadata["routing_model"] = {"version": MODEL_VERSION, "risk_penalty_m": RISK_PENALTY_M,
+        self.metadata["routing_model"] = {"version": SELECTION_VERSION, "risk_penalty_m": RISK_PENALTY_M,
                                           "normalization_peak": self.risk_scale}
         self.points = [record.public() for record in records]
 
@@ -147,12 +159,13 @@ class Router:
                        for i in set(data.get("collision_ids", [])))
                 for n, data in self.graph.nodes(data=True)}
 
-    def edge_cost(self, destination, data, alpha, hour):
+    def edge_cost(self, destination, data, alpha, hour, lanes=True):
         length = float(data["length"])
         if alpha == 0:
             return length
-        return (length * data.get("lane_multiplier", 1.0)
-                + alpha * RISK_PENALTY_M * self.risks[hour][destination])
+        # lanes=False drops the bike-lane discount: route selection compares real distance.
+        multiplier = data.get("lane_multiplier", 1.0) if lanes else 1.0
+        return length * multiplier + alpha * RISK_PENALTY_M * self.risks[hour][destination]
 
     def nearest(self, coordinate):
         distance, index = self.tree.query(PROJECT.transform(coordinate[1], coordinate[0]))
@@ -161,8 +174,12 @@ class Router:
         return self.nodes[index]
 
     def _route(self, start, end, alpha, hour):
+        return self._route_with_path(start, end, alpha, hour)[0]
+
+    def _route_with_path(self, start, end, alpha, hour, lanes=True):
+        """One route and its node path, so callers can tell whether two searches found the same route."""
         def edge_cost(v, data):
-            return self.edge_cost(v, data, alpha, hour)
+            return self.edge_cost(v, data, alpha, hour, lanes)
 
         def weight(u, v, edges):
             return min(edge_cost(v, data) for data in edges.values())
@@ -186,14 +203,75 @@ class Router:
             node = self.graph.nodes[start]
             coordinates = [(node["x"], node["y"])] * 2
         ids = set().union(*(set(self.graph.nodes[n].get("collision_ids", [])) for n in path))
-        return {"geometry": {"type": "LineString", "coordinates": coordinates},
-                "distance_m": round(length, 1), "duration_s": round(length / (14000 / 3600)),
-                "ksi_total": len(ids), "ksi_fatal": sum(self.records[i].fatal for i in ids)}
+        route = {"geometry": {"type": "LineString", "coordinates": coordinates},
+                 "distance_m": round(length, 1), "duration_s": round(length / (14000 / 3600)),
+                 "ksi_total": len(ids), "ksi_fatal": sum(self.records[i].fatal for i in ids)}
+        return route, tuple(path)
 
-    def route(self, origin, destination, level, hour):
+    def _choose(self, start, end, hour, direct, target, score_fn):
+        """Pick the shortest route whose score beats `target`; else the highest-scoring one found.
+
+        Candidates run from the fastest route toward the safest by raising the weight on the
+        collision penalty. Every candidate is scored with `score_fn`, the same score the
+        cards show. The first weight that qualifies is refined by bisection so the route is
+        no longer than it has to be. Speed is constant, so the fastest route is the shortest.
+        """
+        if target is None:
+            return direct, {"target": None, "met": True, "extra_distance_m": 0.0,
+                            "same_route": True, "candidates": 1}
+
+        def qualifies(route):
+            return route["safety"]["score"] > target
+
+        found = {direct["_path"]: direct}
+
+        def run(alpha):
+            route, path = self._route_with_path(start, end, alpha, hour, lanes=False)
+            if path not in found:
+                route["safety"] = score_fn(route)
+                found[path] = route
+            return found[path]
+
+        if not qualifies(direct):
+            low = 0.0
+            for alpha in CANDIDATE_ALPHAS:
+                if qualifies(run(alpha)):
+                    for _ in range(REFINE_STEPS):
+                        middle = (low + alpha) / 2
+                        if qualifies(run(middle)):
+                            alpha = middle
+                        else:
+                            low = middle
+                    break
+                low = alpha
+        routes = list(found.values())
+        meeting = [route for route in routes if qualifies(route)]
+        if meeting:
+            chosen = min(meeting, key=lambda route: (route["distance_m"], -route["safety"]["score"]))
+        else:
+            chosen = max(routes, key=lambda route: (route["safety"]["score"], -route["distance_m"]))
+        # same_route: the fastest route itself. A different route of equal length (common on
+        # Toronto's grid) is not the same route, and the page must not say it is.
+        return chosen, {"target": target, "met": bool(meeting),
+                        "extra_distance_m": round(chosen["distance_m"] - direct["distance_m"], 1),
+                        "same_route": chosen is direct, "candidates": len(routes)}
+
+    def route(self, origin, destination, level, hour, score_fn=None):
+        """The fastest route and the route chosen for the rider's style.
+
+        `score_fn(route)` returns the safety score dict for a route; by default the
+        collisions-only score. Confident riders (level 3) get the fastest route whatever its
+        score; levels 1 and 2 get the shortest route scoring above TARGET_SCORES[level].
+        """
         start, end = self.nearest(origin), self.nearest(destination)
-        return {"direct": self._route(start, end, 0, hour),
-                "safer": self._route(start, end, ALPHAS[level], hour),
+        score_fn = score_fn or (lambda r: safety_score(r["ksi_total"], r["ksi_fatal"], r["distance_m"]))
+        direct, direct_path = self._route_with_path(start, end, 0, hour)
+        direct["safety"] = score_fn(direct)
+        direct["_path"] = direct_path
+        chosen, selection = self._choose(start, end, hour, direct, TARGET_SCORES[level], score_fn)
+        for route in (direct, chosen):
+            route.pop("_path", None)
+        return {"direct": direct, "safer": chosen, "selection": selection,
                 "risk_points": self.points,
                 "snapped": {"origin": [self.graph.nodes[start]["y"], self.graph.nodes[start]["x"]],
                             "destination": [self.graph.nodes[end]["y"], self.graph.nodes[end]["x"]]},

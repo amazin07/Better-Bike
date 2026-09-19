@@ -121,6 +121,29 @@ try {
     document.querySelector('[data-level="1"]').click();`);
   await waitFor("window.routeBodies.length === 1 && !$('results').hidden");
   assert.equal(await evaluate("window.routeBodies.at(-1).level"), 1);
+  assert.deepEqual(
+    await evaluate(
+      "[...document.querySelectorAll('[data-level]')].map((b) => b.textContent.trim())",
+    ),
+    ["Beginner", "Intermediate", "Confident"],
+  );
+  assert(await evaluate("$('selection-note').textContent.startsWith('Beginner:')"));
+  // Confident always gets the fastest route: both cards show the same trip.
+  await evaluate("document.querySelector('[data-level=\"3\"]').click();");
+  await waitFor(
+    "window.routeBodies.at(-1).level === 3 && !$('results').hidden && $('selection-note').textContent.startsWith('Confident')",
+  );
+  assert.equal(
+    await evaluate(
+      "$('safer-eta').textContent === $('direct-eta').textContent && $('safer-metrics').textContent === $('direct-metrics').textContent",
+    ),
+    true,
+  );
+  await evaluate("document.querySelector('[data-level=\"2\"]').click();");
+  await waitFor(
+    "window.routeBodies.at(-1).level === 2 && !$('results').hidden",
+  );
+  checks.push("Riding styles: labels, explanation, and Confident = fastest");
   // There is no time slider: the hour is always Toronto's current hour.
   assert.equal(await evaluate("document.getElementById('hour')"), null);
   assert.equal(
@@ -131,7 +154,7 @@ try {
   assert(
     await evaluate("$('comparison-hour').textContent.startsWith('Right now')"),
   );
-  checks.push("Confidence control refetches; hour is always Toronto's now");
+  checks.push("Riding style control refetches; hour is always Toronto's now");
 
   await evaluate(`window.realTorontoHour=torontoHour;
     window.fetch=async(url,options)=>{const response=await window.originalFetch(url,options);

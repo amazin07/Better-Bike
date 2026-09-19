@@ -7,9 +7,9 @@ the shared handoff for every teammate and coding agent working in this repo.
 
 Build a **website** for Toronto cyclists: a full-viewport Leaflet map backed by
 Flask and a locally cached OSMnx/NetworkX bike graph. Compare the shortest route
-with a route weighted by recorded cyclist collision history, rider confidence,
-and the current Toronto hour. The user explicitly confirmed the browser website
-format.
+with the route chosen for the rider's style (Beginner, Intermediate, or Confident)
+using recorded cyclist collision history and the current Toronto hour. The user
+explicitly confirmed the browser website format.
 
 Toronto routing is implemented. The user subsequently authorized Firebase
 Google sign-in, private bike registration, optional rental listings, and rental
@@ -54,16 +54,23 @@ Never fabricate collision statistics.
 - Preserve actual OSM edge geometry and direction, including parallel edges.
 - Do not promise the weighted route always reduces raw counts; show actual
   differences honestly, including ties, increases, and zero baselines.
-- The user authorized tuning while keeping bike lanes strongly prioritized.
-  Keep the 0.55 protected / 0.80 painted lane distance multipliers. The revised
-  cost is `length * lane_multiplier + alpha * 600m * normalized_node_risk`.
-  Do not apply lane discounts or approach-edge length to the collision penalty.
-  Normalize against a single maximum across all graph nodes and 24 hours, so a
-  time boost cannot cancel itself through per-hour normalization. The direct
-  baseline remains pure distance. This decision supersedes the original spec.
-- `scripts/evaluate_routing.py` compares the original and current heuristics on
-  all 132 directed landmark pairs; `docs/routing-evaluation.json` records the
-  current snapshot. This checks behavior, not predicted real-world safety.
+- **Route choice follows the rider's style; distance and speed come first.** The
+  user superseded the earlier lane-priority tuning. Confident (`level` 3) always
+  gets the fastest route, whatever its safety score. Beginner (1) and Intermediate
+  (2) get the shortest route whose safety score is strictly above 90 or 70, which
+  is the fastest route itself when it already qualifies. If nothing qualifies, show
+  the highest-scoring route found and say so in the UI. Identical Confident,
+  Beginner, and direct routes are expected and fine; never trade distance for
+  safety for a Confident rider. The same score the cards show (including live
+  traffic while that switch is on) decides qualification. Candidates come from
+  `length + alpha * 600m * normalized_node_risk` with **no bike-lane discount**,
+  normalized against a single maximum across all nodes and 24 hours. Detours are
+  not capped. Bike-lane multipliers are still computed at data build but no longer
+  affect route choice or the score. The direct route stays pure distance.
+- `scripts/evaluate_routing.py` compares the original and the previous
+  lane-weighted heuristics on all 132 directed landmark pairs;
+  `docs/routing-evaluation.json` records that historical snapshot. It does not
+  evaluate the current selection rules. It checks behavior, not real-world safety.
 - CARTO now requires a basemap API key. `CARTO_BASEMAP_KEY` enables Positron;
   without it the website uses a muted OpenStreetMap fallback. Never commit keys.
 - Keep README limitations visible to developers. Current City guidance says

@@ -1,9 +1,9 @@
 # BikeBetter · Toronto
 
-A browser website that compares a shortest-distance bike route with a route
-weighted by recorded cyclist collision history, bike infrastructure, rider
-confidence, and the current Toronto hour, and shows each route's ETA and a safety
-score. Built for Future Legends UofT 2026.
+A browser website that compares the fastest bike route with the route chosen for
+the rider's style (Beginner, Intermediate, or Confident), using recorded cyclist
+collision history and the current Toronto hour, and shows each route's ETA and a
+safety score. Built for Future Legends UofT 2026.
 
 Read [AGENTS.md](AGENTS.md) for the shared teammate/agent handoff and
 [the original specification](docs/safer-ride-spec.md) for the product brief.
@@ -21,9 +21,9 @@ python3 -m venv .venv
 ```
 
 Open **http://127.0.0.1:5001**. Click two map locations, or search a local landmark
-or street intersection. Change the confidence buttons to recalculate; routes
-always use the current Toronto hour (there is no time-of-day control and no
-forecasting). A third map click starts a new route. The sample ride is a real
+or street intersection. Change the riding style (Beginner, Intermediate,
+Confident) to recalculate; routes always use the current Toronto hour (there is no
+time-of-day control and no forecasting). A third map click starts a new route. The sample ride is a real
 calculation, never a canned response.
 
 The first data build requires internet and can take several minutes. It downloads
@@ -39,7 +39,7 @@ graph. Route requests and place searches make **no external API calls**.
 
 `requirements-lock.txt` records the exact Python versions used for verification;
 install that file instead of `requirements.txt` for a pinned environment.
-The verified build passes 32 parser/model/API tests and the desktop/mobile browser
+The verified build passes the full pytest suite and the desktop/mobile browser
 smoke checks described below.
 
 Restart Flask after rebuilding data. Use `HOST=0.0.0.0 PORT=5001` before the run
@@ -143,11 +143,13 @@ Source years are 2006–2026, with the latest source collision dated August 29,
 2026. Counts will change when sources are refreshed.
 
 - `GET /api/health`: readiness, graph size, collision counts, coverage, build date.
-- `POST /api/route`: direct/weighted route geometries, metres, seconds, distinct
-  collision counts, fatal subsets, collision points, snapped coordinates, and a
-  `safety` score per route (see Safety score). The optional boolean `traffic` asks
-  for live traffic to be included in the score; `traffic_used` reports whether it
-  was. Sending `traffic` never calls HERE.
+- `POST /api/route`: the fastest (`direct`) route and the route chosen for the
+  rider's style (`safer`, from `level`: 1 Beginner, 2 Intermediate, 3 Confident),
+  each with geometry, metres, seconds, distinct collision counts, fatal subsets, and
+  a `safety` score (see Safety score); plus `selection` (how the route was chosen),
+  collision points, and snapped coordinates. The optional boolean `traffic` asks for
+  live traffic to be included in the score; `traffic_used` reports whether it was.
+  Sending `traffic` never calls HERE.
 - `GET /api/places?q=...`: local landmark/intersection search; not arbitrary
   address geocoding and no third-party geocoder.
 - `GET /api/config`: browser basemap configuration.
@@ -186,43 +188,75 @@ across all graph nodes and all 24 hours**, with zero risk used for a graph witho
 collisions. Using a common scale preserves the hour boost even if a graph has
 only one node with recorded collisions.
 
-The direct route minimizes distance only. With the user's approval, the revised
-weighted route keeps strong bike-lane preference and uses:
+The **direct** route always minimizes distance only. The route shown as **Your
+route** depends on the rider's style (the request's `level`):
+
+| Style | `level` | Your route |
+| --- | ---: | --- |
+| Confident | 3 | The **fastest** route, whatever its safety score. Speed is a constant 14 km/h, so this is the shortest route and is identical to the direct route. |
+| Intermediate | 2 | The shortest route whose safety score is **above 70** (the fastest route itself if it already qualifies). |
+| Beginner | 1 | The shortest route whose safety score is **above 90** (the fastest route itself if it already qualifies). |
+
+Distance and speed come first and safety matters only to Beginner and
+Intermediate riders, so identical routes are common and expected. "Above" is strict
+on the whole-number score the cards show, which includes live traffic while that
+switch is on.
+
+To find the shortest qualifying route, the router generates candidates from the
+fastest route toward the safest with
 
 ```text
-cost = length_m × lane_multiplier + alpha × 600 m × normalized_node_risk
+cost = length_m + alpha × 600 m × normalized_node_risk
 ```
 
-Alpha is 0.9, 0.5, or 0.2 by rider level. The 600 m constant is a heuristic distance
-tradeoff, not a predicted injury rate: at maximum normalized risk, the extra
-cost is 540, 300, or 120 lane-weighted metres respectively. This additive
-intersection penalty is independent of approach length and is **not discounted
-by a bike lane**. A short approach cannot make an intersection's history nearly
-disappear. Lane distance remains discounted even when there is no collision
-history, so longer protected/painted alternatives can still beat shorter streets.
+for a rising series of `alpha` values (`CANDIDATE_ALPHAS`, 0.05 up to 40; alpha 0
+is the fastest route). Bike-lane discounts are **not** used, so the search compares
+real distance. It scores each candidate, stops at the first alpha that qualifies,
+refines that step by bisection so the detour is no longer than necessary, and
+returns the shortest qualifying candidate. The 600 m constant is a heuristic
+distance tradeoff, not a predicted injury rate. If no candidate qualifies, the
+highest-scoring route found is shown (ties go to the shorter one) and the page says
+no route reaches the target. The API's `selection` reports `target`, `met`,
+`extra_distance_m` (versus the fastest route), `same_route` (whether it is the
+fastest route itself, not merely one of equal length, which is common on Toronto's
+grid), and `candidates` (distinct routes scored). **Detours are not capped.**
 
-Toronto cycling-network geometries supply 0.55 for
-separated tracks/trails, 0.8 for painted/buffered lanes, and 1 otherwise. Matching
-requires at least 65% of the street edge to lie within 12 m of an infrastructure
-line, so a simple perpendicular crossing is not enough. The less favorable of
-the source's two directional classifications is used conservatively.
+Toronto cycling-network geometries are still matched to street edges at data build
+(0.55 for separated tracks/trails, 0.8 for painted or buffered lanes, matching at
+least 65% of an edge within 12 m, taking the less favorable of the two directions),
+and the multiplier stays on the graph, but **it no longer affects route choice or the
+score**: bike-lane use is a factor in neither.
 
-**Lane preference can still outweigh raw collision counts.** The weighted route
-can have more recorded collisions or remain identical across hours/levels; the
-app displays those outcomes honestly. U of T → St. Lawrence Market is one such
-case in the current snapshot. No universal reduction is claimed, and controls
-never generate artificial changes for demonstration.
+Measured on all 132 landmark-to-landmark routes at 1pm (September 19, 2026 data):
 
-The included example, **Kensington Market → Christie Pits Park**, has one recorded
-collision on the comfortable route versus eight on the direct route at 8am in
-this snapshot. The API's `hour` field still changes routes (U of T → St. Lawrence
-Market gives five vs seven recorded collisions on the suggested paths at 8am vs
-10pm; four on the direct route), but the website has no time control and always
-sends the current Toronto hour, so it does no forecasting. Route counts are
-all-time, not counts of events occurring at that hour. Results may change after a
-data refresh.
+| Style | Reaches its target | Identical to the fastest | Extra distance (median / worst 10%) |
+| --- | ---: | ---: | ---: |
+| Beginner | 129 of 132 | 19 | 7% / 51% |
+| Intermediate | 132 of 132 | 73 | 0% / 13% |
+| Confident | always | 132 | 0% |
 
-### Weighting comparison
+The worst single Beginner detour was 293% longer than the fastest route. On the 3
+Beginner routes that miss, the fastest route scores exactly 90, which is not above
+90. Fastest routes score as low as 30, and Confident riders are shown them anyway.
+Searching averages about 33 ms (Confident), 113 ms (Intermediate), and 245 ms
+(Beginner), and about 1 s at worst.
+
+The chosen route never scores below the fastest one, but because the score is a rate
+per km, a longer route can pass more recorded collisions in total. The app shows the
+counts and scores as they are and claims no universal reduction; controls never
+generate artificial changes for demonstration.
+
+The API's `hour` field still changes candidate routes and scores through the hour
+boost above, but the website has no time control and always sends the current
+Toronto hour, so it does no forecasting. Route counts are all-time, not counts of
+events occurring at that hour. Results may change after a data refresh.
+
+### Weighting comparison (historical)
+
+> This section documents the **previous lane-weighted route model**
+> (`MODEL_VERSION`, `lane-priority-node-penalty-v2`), which no longer chooses
+> routes. `scripts/evaluate_routing.py` still measures that model, not the current
+> selection rules above.
 
 The 600 m penalty was chosen after comparing 300, 600, 900, 1200, and 1800 m:
 higher penalties reduced historical counts further but sacrificed progressively
@@ -342,6 +376,7 @@ static/collisions.json     Minimal real records for the initial map
 tests/test_routing.py       Parser, model, and API regression tests
 tests/test_traffic.py       Traffic cache, HERE client, and overlay API tests (no network)
 tests/test_scoring.py       Score formula, congestion matching, and score API tests
+tests/test_selection.py     Riding-style route selection and the selection API field
 scripts/browser_smoke.mjs   Desktop/mobile interaction and failure checks
 scripts/evaluate_routing.py Original/current real-route comparison
 docs/routing-evaluation.json Recorded comparison with source provenance
@@ -373,6 +408,6 @@ For the browser smoke check, start Flask, start Chrome with
 `--remote-debugging-port=9224 --user-data-dir=/tmp/safer-ride-browser`, and open
 `http://127.0.0.1:5001`. With Node 22 or newer, run
 `node scripts/browser_smoke.mjs`. It checks clicks, local search, the ETA-first
-cards and scores, confidence requests, stale responses, routing failure, and mobile
+cards and scores, riding styles, stale responses, routing failure, and mobile
 controls. Screenshots go
 to the ignored `artifacts/` directory.
