@@ -47,7 +47,8 @@ def test_both_pages_use_the_same_navbar_markup(pages):
 def test_each_page_marks_only_its_own_link_as_current(pages, page, current):
     links = re.findall(r'<a href="(/[a-z]*)"(\s+aria-current="page")?\s*>\s*([^<]+?)\s*</a\s*>',
                        navbar(pages[page]))
-    assert [(href, label) for href, _, label in links] == [("/", "Map"), ("/rentals", "Rentals")]
+    assert [(href, label) for href, _, label in links] == [
+        ("/", "Map"), ("/rentals", "Rentals"), ("/missing", "Missing bikes")]
     assert [label for _, mark, label in links if mark] == [current]
 
 

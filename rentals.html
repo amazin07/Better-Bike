@@ -28,6 +28,7 @@
       <nav class="site-links" aria-label="Main">
         <a href="/">Map</a>
         <a href="/rentals" aria-current="page">Rentals</a>
+        <a href="/missing">Missing bikes</a>
       </nav>
       <div class="site-account">
         <span id="account-name"></span>
@@ -327,6 +328,60 @@
         <p id="request-error" class="error" role="alert"></p>
         <div class="dialog-actions">
           <button class="primary" type="submit">Send rental request</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="report-dialog" aria-labelledby="report-title">
+      <form id="report-form">
+        <div class="dialog-heading">
+          <h2 id="report-title">Report a bike missing</h2>
+          <button
+            type="button"
+            class="close"
+            data-close
+            aria-label="Close report"
+          >
+            ×
+          </button>
+        </div>
+        <p id="report-bike" class="muted"></p>
+        <label
+          >Last seen location<input
+            name="lastSeenLocation"
+            maxlength="120"
+            required
+            placeholder="e.g. Locked outside Robarts Library, U of T"
+        /></label>
+        <label
+          >What happened / distinctive features <span>(optional)</span>
+          <textarea
+            name="description"
+            maxlength="1000"
+            rows="3"
+            placeholder="When it went missing, plus stickers, scratches, or accessories"
+          ></textarea>
+        </label>
+        <div class="form-grid">
+          <label
+            >Contact email for tips<input
+              name="contactEmail"
+              type="email"
+              maxlength="254"
+              required /></label
+          ><label
+            >Reward · CAD <span>(optional)</span
+            ><input name="reward" inputmode="decimal" placeholder="e.g. 50.00"
+          /></label>
+        </div>
+        <p class="hint">
+          Your report appears on the public Missing bikes page so renters, bike
+          shops, and police can watch for it. Publishing a report also removes
+          any live rental listing. A reward is paid through Stripe test checkout
+          when you recover the bike.
+        </p>
+        <p id="report-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="primary" type="submit">Post to Missing bikes</button>
         </div>
       </form>
     </dialog>

@@ -143,5 +143,35 @@ service cloud.firestore {
       // Only the server's verified Stripe integration may change payment state.
       allow write: if false;
     }
+
+    function validReport(r) {
+      return r.keys().hasAll(['bikeId','ownerUid','title','colour','type','neighbourhood',
+        'lastSeenLocation','description','contactEmail','rewardCents','status','photoDataUrl','createdAt','updatedAt'])
+        && r.keys().hasOnly(['bikeId','ownerUid','title','colour','type','neighbourhood',
+        'lastSeenLocation','description','contactEmail','rewardCents','status','photoDataUrl','createdAt','updatedAt'])
+        && text(r.bikeId, 1, 128) && r.ownerUid == request.auth.uid
+        && text(r.title, 1, 150) && text(r.colour, 0, 40) && text(r.type, 0, 40)
+        && text(r.neighbourhood, 0, 80) && text(r.lastSeenLocation, 1, 120)
+        && text(r.description, 0, 1000) && text(r.contactEmail, 3, 254)
+        && r.rewardCents is int && r.rewardCents >= 0 && r.rewardCents <= 100000
+        && r.status in ['missing','recovered']
+        && (r.photoDataUrl == '' || (r.photoDataUrl is string
+            && r.photoDataUrl.size() <= 220000
+            && r.photoDataUrl.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}')))
+        && r.createdAt is timestamp && r.updatedAt == request.time;
+    }
+    match /theftReports/{reportId} {
+      // Public so anyone — a renter, a bike shop, or police — can spot a missing bike.
+      allow read: if true;
+      allow create: if signedIn() && validReport(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'missing'
+        && get(bikePath(request.resource.data.bikeId)).data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && validReport(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.bikeId == resource.data.bikeId;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
   }
 }

@@ -59,6 +59,17 @@ export async function connectFirebase() {
       if (!response.ok) throw new Error(result.error || 'Checkout is unavailable.');
       return result;
     },
+    rewardAction: async (reportId) => {
+      if (!auth.currentUser) throw new Error('Sign in before paying a reward.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/reward/checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reportId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Reward checkout is unavailable.');
+      return result;
+    },
     signIn: () => signInWithPopup(auth, provider),
     signOut: () => signOut(auth),
     onAuth: (callback) => onAuthStateChanged(auth, callback),
