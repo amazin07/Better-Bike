@@ -13,6 +13,7 @@ from routing import Collision, RouteError, Router
 from scoring import safety_score
 from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
 from firebase_config import public_firebase_config
+from payments import payments_blueprint, public_payment_config
 
 ROOT = Path(__file__).resolve().parent
 LANDMARKS = [
@@ -55,7 +56,12 @@ def validate_payload(payload):
 
 def create_app(router=None, cache_path=None, traffic=None):
     app = Flask(__name__, static_folder=str(ROOT / "static"))
+    app.register_blueprint(payments_blueprint())
     app.config["MAX_CONTENT_LENGTH"] = 8192
+    @app.before_request
+    def payment_payload_limit():
+        if request.endpoint in {'payments.webhook', 'payments.connect_webhook'}:
+            request.max_content_length = 262144
     if router is None:
         path = Path(cache_path) if cache_path is not None else ROOT / "data/processed/toronto.pkl"
         try:
@@ -90,9 +96,25 @@ def create_app(router=None, cache_path=None, traffic=None):
     def index():
         return send_from_directory(ROOT, "index.html")
 
+    @app.get("/static/stripe-connect-loader.js")
+    def stripe_connect_loader():
+        # Only Stripe's npm loading wrapper is local; Connect.js comes from Stripe.
+        return send_from_directory(ROOT / "node_modules/@stripe/connect-js/dist", "pure.esm.js")
+
     @app.get("/rentals")
     def rentals():
-        return send_from_directory(ROOT, "rentals.html")
+        response = send_from_directory(ROOT, "rentals.html")
+        local_connect = " http://127.0.0.1:8080 http://127.0.0.1:9099" if os.getenv("FIREBASE_USE_EMULATORS") == "1" else ""
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+            "script-src 'self' https://www.gstatic.com https://apis.google.com https://*.stripe.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com https://*.stripe.com; "
+            "frame-src https://*.stripe.com https://*.link.com https://blyatbike.firebaseapp.com http://127.0.0.1:9099; "
+            "connect-src 'self' https://*.googleapis.com https://*.stripe.com https://*.link.com" + local_connect + ";"
+        )
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
 
     @app.get("/api/health")
     def health():
@@ -106,7 +128,7 @@ def create_app(router=None, cache_path=None, traffic=None):
     @app.get("/api/config")
     def config():
         # CARTO basemap keys are browser-visible; restrict their allowed referrers.
-        return jsonify(carto_key=os.environ.get("CARTO_BASEMAP_KEY", ""), firebase=public_firebase_config())
+        return jsonify(carto_key=os.environ.get("CARTO_BASEMAP_KEY", ""), firebase=public_firebase_config(), payments=public_payment_config())
 
     @app.get("/api/places")
     def search():

@@ -393,8 +393,15 @@ registration, optional rental listings, and rental requests. Serial numbers are
 optional. Owners can add, replace, or remove one bike photo; it stays private
 until the bike is published. Serial numbers and owner notes stay private.
 Owners accept or decline requests and mark bikes
-returned. Payments and pickup are arranged directly; Stripe and saved routes
-are not implemented.
+returned. Pickup is arranged directly. Stripe Connect sandbox checkout supports
+owner onboarding and test rental payments with **0% BikeBetter commission**; no
+real money moves. Saved routes are not implemented.
+
+See the [Stripe integration plan and setup](docs/stripe-connect-plan.md). Owners
+start at **My bikes → Set up test payments**. Renters can pay after the owner
+accepts and finishes Stripe setup. Prices use the daily rate for every selected
+calendar day, including both endpoints. Start the local Stripe webhook forwarder
+before Flask and keep it running during payment testing.
 
 See [Firebase setup and teammate handoff](docs/firebase-setup.md) for the current
 cloud provisioning status, data permissions, setup commands, and emulator tests.

@@ -14,7 +14,7 @@ export async function connectFirebase() {
   const response = await fetch("/api/config");
   if (!response.ok)
     throw new Error("Account services are unavailable. Please try again.");
-  const { firebase: config } = await response.json();
+  const { firebase: config, payments } = await response.json();
   if (!config?.apiKey)
     throw new Error(
       "Bike registration is not connected yet. Please try again later.",
@@ -37,6 +37,28 @@ export async function connectFirebase() {
     auth,
     store: createBikeStore({ db, auth, firestore }),
     useEmulators,
+    payments,
+    connectAction: async (action) => {
+      if (!auth.currentUser) throw new Error('Sign in before owner setup.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch(`/api/connect/${action}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: '{}',
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Owner setup is unavailable.');
+      return result;
+    },
+    paymentAction: async (action, requestId) => {
+      if (!auth.currentUser) throw new Error('Sign in before checkout.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch(`/api/payments/${action}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ requestId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Checkout is unavailable.');
+      return result;
+    },
     signIn: () => signInWithPopup(auth, provider),
     signOut: () => signOut(auth),
     onAuth: (callback) => onAuthStateChanged(auth, callback),

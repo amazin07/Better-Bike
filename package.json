@@ -9,5 +9,8 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",
     "firebase": "12.19.0"
+  },
+  "dependencies": {
+    "@stripe/connect-js": "^3.4.6"
   }
 }

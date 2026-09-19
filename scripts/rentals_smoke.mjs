@@ -59,6 +59,7 @@ async function screenshot(name) {
   fs.writeFileSync(`artifacts/${name}.png`, Buffer.from(result.data, "base64"));
 }
 try {
+  await call("Page.bringToFront");
   await call("Runtime.enable");
   await call("Page.navigate", { url: "http://127.0.0.1:5002/rentals" });
   await waitFor("!document.getElementById('auth-button').disabled");
@@ -122,7 +123,7 @@ try {
   await waitFor(
     "!document.getElementById('bike-dialog').open && document.getElementById('listings').textContent.includes('Browser Trek')",
   );
-  await evaluate("document.getElementById('tab-browse').click()");
+  await evaluate("document.getElementById('tab-browse').click(); document.querySelector('#listings .card')?.scrollIntoView()");
   await waitFor(
     "document.querySelector('#listings img.bike-photo')?.naturalWidth > 0",
   );
@@ -161,7 +162,7 @@ try {
   await waitFor(
     "document.getElementById('incoming').textContent.includes('Returned')",
   );
-  await evaluate("document.getElementById('tab-browse').click()");
+  await evaluate("document.getElementById('tab-browse').click(); document.querySelector('#listings .card')?.scrollIntoView()");
   await call("Emulation.setDeviceMetricsOverride", {
     width: 1440,
     height: 1000,

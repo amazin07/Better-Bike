@@ -86,9 +86,10 @@
           <span>Toronto · Prices in CAD</span>
         </div>
         <p class="muted">
-          Send a request to arrange a rental with the owner. No payment is taken
-          here.
+          Send a request to arrange a rental with the owner. Checkout uses the
+          daily rate, including both your start and end dates.
         </p>
+        <p id="payment-info" class="hint">Stripe test checkout · No real charges or owner payouts.</p>
         <div id="listings" class="grid">
           <p class="empty">Loading available bikes…</p>
         </div>
@@ -98,6 +99,17 @@
           <h2>Your bike records</h2>
           <span>Private until you publish</span>
         </div>
+        <aside id="connect-panel" class="card" hidden>
+          <h3>Owner payment setup</h3>
+          <p class="hint">Stripe test mode · 0% BikeBetter commission. No real money moves.</p>
+          <p id="connect-status" role="status">Checking your Stripe account…</p>
+          <div class="actions">
+            <button id="connect-setup" type="button">Set up test payments</button>
+            <button id="connect-refresh" type="button">Check setup status</button>
+            <button id="connect-dashboard" type="button" hidden>Open Stripe dashboard</button>
+          </div>
+          <div id="connect-banner"></div>
+        </aside>
         <div id="my-bikes" class="grid">
           <p class="empty">
             Sign in with Google to register and manage your bikes.
@@ -113,7 +125,7 @@
         <h2>Your rental requests</h2>
         <p class="muted">
           An accepted request reserves the bike until its owner marks it
-          returned. Arrange pickup and payment directly.
+          returned. Arrange pickup directly. Stripe checkout is a test payment only.
         </p>
         <h3>Requests for your bikes</h3>
         <div id="incoming" class="grid"></div>
@@ -291,6 +303,7 @@
           </button>
         </div>
         <p id="request-bike"></p>
+        <p id="request-total" class="rates"></p>
         <div class="form-grid">
           <label
             >Start date<input name="startDate" type="date" required /></label
@@ -307,8 +320,9 @@
         </label>
         <p class="hint">
           Your Google name and email will be shared with this owner. This is a
-          request, not a confirmed booking. Agree on the total price and pickup
-          directly; no payment is taken here.
+          request, not a confirmed booking. After the owner accepts, pay the
+          daily total through Stripe test checkout. Both selected dates count
+          as rental days. No real money is charged or paid to the owner.
         </p>
         <p id="request-error" class="error" role="alert"></p>
         <div class="dialog-actions">

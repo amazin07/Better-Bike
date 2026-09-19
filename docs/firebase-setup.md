@@ -2,7 +2,7 @@
 
 The user approved Google sign-in, private bike registration, and optional rental
 publication after the Toronto routing website was complete. This supersedes the
-original brief's account/database non-goals. There is no payment processing.
+original brief's account/database non-goals. Stripe Connect sandbox payments are now implemented; see [the Stripe plan](stripe-connect-plan.md). No real payments are enabled.
 
 ## Project setup
 
@@ -59,8 +59,11 @@ it must remain server-only and is never included in `/api/config`.
 
 Registration is a private account record, not ownership verification, police
 registration, 529 Garage integration, insurance, or a guarantee of condition.
-Pickup, payment, final price, and disputes are arranged directly. There are no
-email notifications, payments, automated expiry, or date-based inventory.
+Pickup and disputes are arranged directly. Stripe test checkout charges the saved
+daily rate for inclusive rental dates after owner acceptance and Stripe setup.
+There are no real payments, email notifications, rental expiry, or date-based inventory.
+Server-only `rentalPayments` and `stripeAccounts` records support the payment flow;
+clients cannot write them. Active checkout prevents completing the rental.
 The UI shows up to 100 documents per listing/account/request query; pagination
 and abuse controls are follow-up work before opening a large public marketplace.
 

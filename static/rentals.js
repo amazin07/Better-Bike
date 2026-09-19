@@ -4,6 +4,13 @@ let selectedPhoto,
   photoGeneration = 0,
   photoBusy = false;
 const photoObservers = new Map();
+const requestRows = { incoming: [], outgoing: [] };
+const paymentRows = { incoming: new Map(), outgoing: new Map() };
+const checkoutReturn = new URLSearchParams(location.search);
+let returnHandled = false;
+function rentalDays(rental) {
+  return Math.round((rental.endAt.toDate() - rental.startAt.toDate()) / 86400000) + 1;
+}
 let client,
   user,
   privateListeners = [],
@@ -212,6 +219,7 @@ function renderBikes(id, bikes, own = false) {
   }
 }
 function renderRequests(id, requests, incoming) {
+  requestRows[id] = requests;
   $(id).replaceChildren();
   if (!requests.length)
     return empty(
@@ -252,6 +260,15 @@ function renderRequests(id, requests, incoming) {
     else if (request.ownerEmail)
       card.append(node("p", `Contact owner: ${request.ownerEmail}`, "meta"));
     if (request.message) card.append(node("p", request.message, "description"));
+    const payment = paymentRows[id].get(request.id);
+    const pendingPayment = ['creating', 'open', 'processing'].includes(payment?.status);
+    const days = rentalDays(request);
+    card.append(node('p', `${days} ${days === 1 ? 'day' : 'days'} × ${money(request.rateDayCents)} = ${money(days * request.rateDayCents)} CAD`, 'rates'));
+    if (payment) card.append(node('p', {
+      paid: 'Test payment confirmed · No real money charged',
+      creating: 'Preparing test checkout', open: 'Test checkout in progress',
+      processing: 'Waiting for Stripe confirmation', failed: 'Test payment failed · You can retry', expired: 'Test checkout cancelled or expired · Unpaid',
+    }[payment.status] || 'Payment status unavailable', 'meta'));
     const buttons = node("div", "", "actions");
     const change = (label, state) =>
       action(label, async () => {
@@ -270,8 +287,37 @@ function renderRequests(id, requests, incoming) {
         );
       else buttons.append(change("Cancel request", "cancelled"));
     }
-    if (incoming && request.status === "accepted")
-      buttons.append(change("Mark returned", "completed"));
+    if (request.status === 'accepted') {
+      if (!incoming && payment?.status !== 'paid') {
+        const pay = action(pendingPayment ? 'Resume test checkout' : `Pay ${money(days * request.rateDayCents)} · Test`, async () => {
+          const result = await client.paymentAction('checkout', request.id);
+          if (result.status === 'paid') { notice('Test payment confirmed. No real money was charged.'); return; }
+          if (result.status === 'processing') { notice('Stripe is still confirming this payment. Check again shortly.'); return; }
+          const url = new URL(result.url);
+          if (url.protocol !== 'https:' || url.hostname !== 'checkout.stripe.com') throw new Error('Invalid checkout link.');
+          location.assign(url.href);
+        }, true);
+        pay.disabled = !client.payments?.enabled || payment?.status === 'processing';
+        if (!client.payments?.enabled) pay.textContent = 'Test checkout unavailable';
+        buttons.append(pay);
+      }
+      if (pendingPayment) {
+        buttons.append(action('Check payment', async () => {
+          const result = await client.paymentAction('refresh', request.id);
+          notice(result.status === 'paid' ? 'Test payment confirmed. No real money was charged.' : `Payment status: ${result.status}.`);
+        }));
+        if (payment.status !== 'processing') buttons.append(action('Cancel checkout', async () => {
+          const result = await client.paymentAction('cancel', request.id);
+          notice(result.status === 'paid' ? 'Payment completed before cancellation. Test payment confirmed.' : result.status === 'processing' ? 'Stripe is still confirming payment. Check again shortly.' : 'Checkout closed. The rental remains accepted; you can retry payment.');
+        }));
+      }
+      if (incoming) {
+        const returned = change('Mark returned', 'completed');
+        returned.disabled = pendingPayment;
+        if (pendingPayment) card.append(node('p', 'Finish or cancel checkout before marking this bike returned.', 'hint'));
+        buttons.append(returned);
+      }
+    }
     card.append(buttons);
     $(id).append(card);
   }
@@ -446,6 +492,17 @@ function openRequest(bike) {
     $("request-form").elements[name].min = today;
     $("request-form").elements[name].value = today;
   }
+  const quote = () => {
+    const start = new Date($('request-form').elements.startDate.value + 'T00:00:00Z');
+    const end = new Date($('request-form').elements.endDate.value + 'T00:00:00Z');
+    const days = Math.round((end - start) / 86400000) + 1;
+    $('request-total').textContent = days >= 1 && days <= 31
+      ? `${days} ${days === 1 ? 'day' : 'days'} × ${money(bike.rateDayCents)} = ${money(days * bike.rateDayCents)} CAD · Test checkout after owner acceptance`
+      : 'Choose an end date on or after the start, within 30 days.';
+  };
+  $('request-form').elements.startDate.onchange = quote;
+  $('request-form').elements.endDate.onchange = quote;
+  quote();
   $("request-dialog").showModal();
 }
 $("request-form").onsubmit = (event) => {
@@ -467,11 +524,70 @@ $("request-form").onsubmit = (event) => {
 };
 $("auth-button").onclick = () =>
   busy($("auth-button"), () => (user ? client.signOut() : client.signIn()));
+let connectInstance = null;
+let connectGeneration = 0;
+function resetConnect() {
+  connectGeneration += 1;
+  connectInstance?.logout().catch(() => {});
+  connectInstance = null;
+  $('connect-banner').replaceChildren();
+  $('connect-panel').hidden = true;
+}
+async function refreshConnect() {
+  const uid = user?.uid, generation = connectGeneration;
+  if (!uid || !client.payments?.connectEnabled) return;
+  $('connect-panel').hidden = false;
+  const status = await client.connectAction('status');
+  if (user?.uid !== uid || connectGeneration !== generation) return;
+  $('connect-status').textContent = status.ready
+    ? 'Ready to receive test rental payments. BikeBetter keeps 0%.'
+    : status.exists ? 'Finish Stripe’s test setup before renters can pay for your bikes.'
+      : 'Set up Stripe when you want to test renting out a bike. Registration does not require it.';
+  $('connect-setup').textContent = status.exists ? 'Continue Stripe setup' : 'Set up test payments';
+  $('connect-dashboard').hidden = !status.exists;
+  if (status.exists && client.payments.publishableKey && !connectInstance) {
+    const { loadConnectAndInitialize } = await import('/static/stripe-connect-loader.js');
+    if (user?.uid !== uid || connectGeneration !== generation || connectInstance) return;
+    connectInstance = loadConnectAndInitialize({
+      publishableKey: client.payments.publishableKey,
+      fetchClientSecret: async () => {
+        if (user?.uid !== uid || connectGeneration !== generation) throw new Error('Sign in again to view Stripe.');
+        const session = await client.connectAction('banner');
+        if (user?.uid !== uid || connectGeneration !== generation) throw new Error('Account changed.');
+        return session.clientSecret;
+      },
+      appearance: { variables: { colorPrimary: '#14467d', fontFamily: 'IBM Plex Sans, sans-serif' } },
+    });
+    const banner = connectInstance.create('notification-banner');
+    banner.setOnLoadError(() => { if (user?.uid === uid) notice('Stripe’s reminder panel could not load. Use Continue Stripe setup to check your details.', true); });
+    $('connect-banner').append(banner);
+  }
+}
+async function ownerAction(action) {
+  const uid = user?.uid;
+  const result = await client.connectAction(action);
+  if (user?.uid !== uid) return;
+  const url = new URL(result.url);
+  if (url.protocol !== 'https:' || !(url.hostname === 'stripe.com' || url.hostname.endsWith('.stripe.com'))) throw new Error('Stripe returned an invalid setup link.');
+  location.assign(url.href);
+}
+for (const [id, action] of [['connect-setup', 'onboarding'], ['connect-dashboard', 'dashboard'], ['connect-refresh', 'status']]) {
+  $(id).addEventListener('click', async () => {
+    $(id).disabled = true;
+    try { if (action === 'status') await refreshConnect(); else await ownerAction(action); }
+    catch (error) { notice(errorMessage(error), true); }
+    finally { $(id).disabled = false; }
+  });
+}
+
 async function start() {
   try {
     const module = await import("./firebase-client.js");
     errorMessage = module.friendlyError;
     client = await module.connectFirebase();
+    $('payment-info').textContent = client.payments?.enabled
+      ? 'Stripe test checkout · 0% BikeBetter commission. No real money moves. Pay the daily total after the owner accepts and finishes Stripe setup.'
+      : 'Stripe test checkout is not connected yet. You can still send and manage rental requests.';
     if (client.useEmulators)
       notice("Local test mode · Changes are stored in the Firebase emulators.");
     let listings = [];
@@ -485,6 +601,10 @@ async function start() {
     client.onAuth((current) => {
       for (const unsubscribe of privateListeners) unsubscribe();
       privateListeners = [];
+      for (const direction of ['incoming', 'outgoing']) {
+        requestRows[direction] = []; paymentRows[direction].clear();
+      }
+      resetConnect();
       user = current;
       $("auth-button").disabled = false;
       $("register-button").disabled = false;
@@ -506,6 +626,14 @@ async function start() {
         );
       if (user) {
         const uid = user.uid;
+        refreshConnect().catch(error => { if (user?.uid === uid) notice(errorMessage(error), true); });
+        if (!returnHandled && checkoutReturn.has('connect')) {
+          returnHandled = true; tab('mine');
+          history.replaceState(null, '', '/rentals');
+          notice(checkoutReturn.get('connect') === 'refresh'
+            ? 'That setup link expired. Select Continue Stripe setup for a fresh link.'
+            : 'Welcome back. Checking your Stripe setup status…');
+        }
         const guarded = (fn) => (data) => {
           if (user?.uid === uid) fn(data);
         };
@@ -526,6 +654,12 @@ async function start() {
                 (error) => empty(direction, errorMessage(error)),
               ),
             );
+          for (const direction of ['incoming', 'outgoing']) privateListeners.push(
+            client.store.watchPayments(direction, guarded(data => {
+              paymentRows[direction] = new Map(data.map(row => [row.id, row]));
+              renderRequests(direction, requestRows[direction], direction === 'incoming');
+            }), error => notice(errorMessage(error), true)),
+          );
         } catch (error) {
           notice(errorMessage(error), true);
         }
@@ -533,6 +667,14 @@ async function start() {
           pendingRegistration = false;
           history.replaceState(null, "", "/rentals");
           openBike().catch((error) => notice(errorMessage(error), true));
+        }
+        if (!returnHandled && checkoutReturn.has('checkout') && checkoutReturn.has('request_id')) {
+          returnHandled = true; tab('requests');
+          history.replaceState(null, '', '/rentals');
+          notice('Checking your payment with Stripe…');
+          client.paymentAction(checkoutReturn.get('checkout') === 'cancelled' ? 'cancel' : 'refresh', checkoutReturn.get('request_id'))
+            .then(result => notice(result.status === 'paid' ? 'Test payment confirmed. No real money was charged.' : `Payment status: ${result.status}. You can retry from Rental requests.`))
+            .catch(error => notice(errorMessage(error), true));
         }
       }
     });

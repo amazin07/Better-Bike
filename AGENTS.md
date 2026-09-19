@@ -14,7 +14,8 @@ explicitly confirmed the browser website format.
 Toronto routing is implemented. The user subsequently authorized Firebase
 Google sign-in, private bike registration, optional rental listings, and rental
 requests. This supersedes the original spec's no-accounts/database scope.
-No Stripe, New York, turn-by-turn navigation, or real payments.
+The user also authorized Stripe Connect in test mode, with 0% platform commission.
+No New York, turn-by-turn navigation, or real payments.
 Live HERE traffic exists only as a display-only, opt-in map overlay
 (`traffic.py`, see README); it never feeds routing, and only while the switch is
 on does it feed the traffic term of the safety score.
@@ -173,3 +174,26 @@ Protect the shared HERE quota: use `HERE_FIXTURE_DIR` for UI work,
 keep the real key on one demo instance, and never commit `.env` or HERE data.
 Unresolved: the real Traffic free allowance (default budget 2500 is a placeholder)
 and whether HERE's terms allow the shared server cache. See the README limits.
+
+## Stripe Connect (test only)
+
+- See `docs/stripe-connect-plan.md` for the official MCP planner result, setup,
+  webhook events, responsibilities, and limitations. Test mode only; reject live keys.
+- `payments.py` controls CAD daily-inclusive Checkout totals and payment state;
+  `stripe_connect.py` owns Accounts v2 onboarding/readiness. Owner destination and
+  price come only from server records; never accept them from browser input.
+- `firebase_server.py` verifies Firebase tokens and accesses Firestore with Admin
+  credentials. ADC in deployment; explicit Firebase CLI credential opt-in locally.
+- Server-only writes: `rentalPayments/{requestId}`, `stripeAccounts/{ownerUid}`.
+  Payment attempts use immutable Stripe idempotency keys; paid is monotonic.
+  Do not release bikes while checkout is creating/open/processing.
+- Use hosted onboarding + Express; v2 recipient capability, destination charges,
+  `application_fee_amount=0`. The sandbox platform pays processing fees. No real
+  payouts, tax calculation, deposits, refunds/dispute UI, or escrow functionality.
+- Signed Checkout webhooks and Accounts v2 thin webhooks are required. Run
+  `.venv/bin/python scripts/stripe-listen.py` before starting local Flask; this
+  saves signing secrets to ignored `.env` without printing them.
+- `npm ci` installs the official Connect.js loader; Flask serves only that module,
+  and the actual embedded component code is always loaded from Stripe.
+- Never commit API/signing keys, account-session secrets, or onboarding URLs.
+  Prefer restricted keys and a hosted secret store for deployment.

@@ -9,6 +9,10 @@ service cloud.firestore {
     }
     function bikePath(id) { return /databases/$(database)/documents/bikes/$(id); }
     function rentalPath(id) { return /databases/$(database)/documents/rentalRequests/$(id); }
+    function checkoutFinished(id) {
+      let path = /databases/$(database)/documents/rentalPayments/$(id);
+      return !exists(path) || !(get(path).data.status in ['creating','open','processing']);
+    }
     function ownsBike(id) {
       return signedIn() && get(bikePath(id)).data.ownerUid == request.auth.uid;
     }
@@ -109,6 +113,7 @@ service cloud.firestore {
             && getAfter(bikePath(before.bikeId)).data.activeRequestId == id
             && !getAfter(bikePath(before.bikeId)).data.available)
         || (before.status == 'accepted' && after.status == 'completed'
+            && checkoutFinished(id)
             && after.ownerEmail == before.ownerEmail
             && getAfter(bikePath(before.bikeId)).data.activeRequestId == '');
     }
@@ -128,6 +133,15 @@ service cloud.firestore {
             && request.resource.data.status == 'cancelled'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
       allow delete: if false;
+    }
+    match /stripeAccounts/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /rentalPayments/{paymentId} {
+      allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.renterUid == request.auth.uid);
+      // Only the server's verified Stripe integration may change payment state.
+      allow write: if false;
     }
   }
 }

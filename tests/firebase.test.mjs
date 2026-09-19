@@ -389,3 +389,33 @@ test("photo rules reject oversized data, external URLs, SVG, extra private field
     }),
   );
 });
+
+test('payment and Connect records cannot be forged and stay private', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await f.setDoc(f.doc(context.firestore(), 'rentalPayments', 'server-payment'), { ownerUid:'owner', renterUid:'renter', status:'paid' });
+    await f.setDoc(f.doc(context.firestore(), 'stripeAccounts', 'owner'), { accountId:'acct_test', ownerUid:'owner' });
+  });
+  for (const uid of ['owner', 'renter']) {
+    await assertSucceeds(f.getDoc(f.doc(dbFor(uid), 'rentalPayments', 'server-payment')));
+    await assertFails(f.setDoc(f.doc(dbFor(uid), 'rentalPayments', 'forged'), {ownerUid:uid, renterUid:uid, status:'paid'}));
+    await assertFails(f.updateDoc(f.doc(dbFor(uid), 'rentalPayments', 'server-payment'), {status:'paid'}));
+  }
+  await assertFails(f.getDoc(f.doc(dbFor('stranger'), 'rentalPayments', 'server-payment')));
+  await assertSucceeds(f.getDoc(f.doc(dbFor('owner'), 'stripeAccounts', 'owner')));
+  await assertFails(f.getDoc(f.doc(dbFor('renter'), 'stripeAccounts', 'owner')));
+  await assertFails(f.setDoc(f.doc(dbFor('owner'), 'stripeAccounts', 'owner'), {accountId:'acct_attacker'}));
+});
+
+test('unfinished checkout prevents releasing the bike; server-confirmed payment allows return', async () => {
+  const owner=storeFor('owner'), renter=storeFor('renter');
+  const id=await owner.saveBike(input(true)), req=await renter.requestRental(id,dates());
+  await owner.updateRequest(req,'accepted');
+  for (const status of ['creating','open','processing']) {
+    await env.withSecurityRulesDisabled(context => f.setDoc(f.doc(context.firestore(),'rentalPayments',req),{ownerUid:'owner',renterUid:'renter',status}));
+    await assert.rejects(owner.updateRequest(req,'completed'));
+    assert.equal((await f.getDoc(bikeDoc(dbFor('owner'),id))).data().activeRequestId,req);
+  }
+  await env.withSecurityRulesDisabled(context => f.updateDoc(f.doc(context.firestore(),'rentalPayments',req),{status:'paid'}));
+  await owner.updateRequest(req,'completed');
+  assert.equal((await f.getDoc(bikeDoc(dbFor('owner'),id))).data().available,true);
+});

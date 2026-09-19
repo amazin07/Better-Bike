@@ -95,6 +95,9 @@ export function createBikeStore({ db, auth, firestore: f }) {
         error,
         "rentalRequests",
       ),
+    watchPayments: (direction, success, error) => watch([
+      f.where(direction === 'incoming' ? 'ownerUid' : 'renterUid', '==', user().uid),
+    ], success, error, 'rentalPayments'),
 
     async privateDetails(id) {
       user();
