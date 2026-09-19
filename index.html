@@ -305,22 +305,6 @@
         margin: 11px 0 0;
         line-height: 1.5;
       }
-      .time-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .hour-display {
-        font-size: 26px;
-        font-weight: 500;
-        letter-spacing: -1px;
-        color: var(--blue);
-      }
-      .time-label {
-        font-size: 12px;
-        color: var(--muted);
-        margin: 3px 0 0;
-      }
       .switch {
         appearance: none;
         -webkit-appearance: none;
@@ -410,11 +394,15 @@
       .traffic-key[hidden] {
         display: none;
       }
-      /* Same condition that auto-collapses the panel: keep it short so it
-         never reaches the zoom buttons. The phone legend is hidden too. */
+      /* Same condition that auto-collapses the panel. There is no room for the
+         key or the zoom buttons between the panel and the results sheet, so drop
+         them (pinch still zooms). The phone legend is hidden too. */
       @media (max-width: 760px) and (max-height: 739px) {
         .traffic-key {
           display: none;
+        }
+        .leaflet-control-zoom {
+          display: none !important;
         }
       }
       .legend-jam {
@@ -441,23 +429,6 @@
         margin-top: 3px;
         font-size: 12px;
         color: var(--muted);
-      }
-      .slider-wrap {
-        margin-top: 20px;
-      }
-      input[type="range"] {
-        width: 100%;
-        margin: 0;
-        accent-color: var(--blue);
-        cursor: ew-resize;
-        height: 20px;
-      }
-      .time-ticks {
-        display: flex;
-        justify-content: space-between;
-        color: var(--muted);
-        font-size: 10px;
-        margin-top: 6px;
       }
       .controls-footer {
         padding: 14px 24px;
@@ -486,6 +457,8 @@
         top: 24px;
         right: 24px;
         width: 300px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
       }
       .comparison-header {
         padding: 19px 22px;
@@ -563,20 +536,45 @@
         color: var(--muted);
         margin-top: 7px;
       }
+      /* The ETA is the largest text on each card. */
       .big-number {
         font-size: 64px;
         line-height: 1.05;
         font-weight: 600;
         letter-spacing: -3px;
-        margin: 17px 0 4px;
+        margin: 17px 0 6px;
       }
       .your-route .big-number {
         color: var(--blue);
+      }
+      .eta-unit {
+        font-size: 0.34em;
+        font-weight: 500;
+        letter-spacing: 0;
+        margin-left: 7px;
+      }
+      .score-line {
+        font-size: 14px;
+        line-height: 1.4;
+        margin-top: 2px;
+        cursor: help;
+      }
+      .score-line strong {
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .your-route .score-line strong {
+        color: var(--blue);
+      }
+      .score-of {
+        color: var(--muted);
+        font-size: 12px;
       }
       .number-caption {
         font-size: 12px;
         line-height: 1.5;
         color: var(--muted);
+        margin-top: 3px;
       }
       .delta {
         padding: 17px 22px;
@@ -810,15 +808,8 @@
           margin-top: 8px;
           font-size: 11px;
         }
-        .preferences {
-          display: grid;
-          grid-template-columns: 1.12fr 1fr;
-        }
         .preferences .section {
           border-top: 1px solid var(--line);
-        }
-        .preferences .section + .section {
-          border-left: 1px solid var(--line);
         }
         .rider-levels button {
           font-size: 10px;
@@ -828,18 +819,6 @@
           font-size: 10px;
           min-height: 28px;
           margin-top: 7px;
-        }
-        .hour-display {
-          font-size: 23px;
-        }
-        .time-label {
-          font-size: 10px;
-        }
-        .slider-wrap {
-          margin-top: 14px;
-        }
-        .time-ticks {
-          font-size: 9px;
         }
         .controls-footer {
           padding: 9px 16px;
@@ -898,6 +877,12 @@
         .number-caption {
           font-size: 10px;
         }
+        .score-line {
+          font-size: 12px;
+        }
+        .score-line strong {
+          font-size: 14px;
+        }
         .delta {
           grid-column: 1/-1;
           padding: 9px 16px;
@@ -924,10 +909,10 @@
         }
         .leaflet-control-zoom {
           margin-right: 14px !important;
-          margin-bottom: 300px !important;
+          margin-bottom: 356px !important;
         }
         .map-notice {
-          bottom: 290px;
+          bottom: 350px;
           max-width: 90%;
           width: max-content;
           padding: 7px 12px;
@@ -1103,31 +1088,6 @@
               Balance calm streets against time.
             </p>
           </section>
-          <section class="section">
-            <div class="time-header">
-              <div>
-                <h2><label for="hour">Time of day</label></h2>
-                <p class="time-label">When will you ride?</p>
-              </div>
-              <output class="hour-display" id="hour-display" for="hour"
-                >8am</output
-              >
-            </div>
-            <div class="slider-wrap">
-              <input
-                type="range"
-                id="hour"
-                min="0"
-                max="23"
-                value="8"
-                aria-valuetext="8am"
-              />
-              <div class="time-ticks" aria-hidden="true">
-                <span>12am</span><span>6am</span><span>12pm</span
-                ><span>6pm</span><span>11pm</span>
-              </div>
-            </div>
-          </section>
         </div>
         <div class="panel traffic-control" role="group" aria-label="Live traffic">
           <div class="traffic-row">
@@ -1180,7 +1140,7 @@
       >
         <header class="comparison-header">
           <h2>Your ride, compared</h2>
-          <span id="comparison-hour">At 8am</span>
+          <span id="comparison-hour">Right now</span>
         </header>
         <div class="empty" id="empty">
           <svg
@@ -1237,27 +1197,33 @@
               <span class="line" aria-hidden="true"></span>Direct route
             </div>
             <div class="route-metrics" id="direct-metrics"></div>
-            <div class="big-number" id="direct-count"></div>
-            <div class="number-caption">
-              recorded cyclist KSI collisions<br />along this path
+            <div class="big-number" id="direct-eta"></div>
+            <div class="score-line" id="direct-score-line">
+              Safety score <strong id="direct-score"></strong
+              ><span class="score-of">/100</span>
             </div>
+            <div class="number-caption" id="direct-caption"></div>
           </section>
           <section class="route-card your-route">
             <div class="route-title">
               <span class="line" aria-hidden="true"></span>Your route
             </div>
             <div class="route-metrics" id="safer-metrics"></div>
-            <div class="big-number" id="safer-count"></div>
-            <div class="number-caption">
-              recorded cyclist KSI collisions<br />along this path
+            <div class="big-number" id="safer-eta"></div>
+            <div class="score-line" id="safer-score-line">
+              Safety score <strong id="safer-score"></strong
+              ><span class="score-of">/100</span>
             </div>
+            <div class="number-caption" id="safer-caption"></div>
           </section>
           <div class="delta" id="delta"></div>
           <div class="comparison-note">
             KSI = killed or seriously injured. Counts are distinct reported
             collisions, across
-            <span id="record-years">all recorded years</span>. Time changes
-            route weighting; counts show the full history.
+            <span id="record-years">all recorded years</span>. Safety score =
+            100 minus points for recorded collisions per km (and for congested
+            roads when Live traffic is on). It compares routes; it is not a
+            prediction. <span id="score-basis"></span>
           </div>
         </div>
         <div class="error" id="error" role="status" hidden></div>
@@ -1285,7 +1251,6 @@
         origin: null,
         destination: null,
         level: 2,
-        hour: 8,
         markers: [],
         routes: [],
         points: [],
@@ -1295,12 +1260,46 @@
       let map, collisionLayer, routeTimer;
       let trafficLayer, incidentLayer, trafficRenderer;
       const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
-      function syncHour(h) {
-        state.hour = h;
-        $("hour").value = String(h);
-        $("hour-display").textContent = hourLabel(h);
-        $("hour").setAttribute("aria-valuetext", hourLabel(h));
-        $("comparison-hour").textContent = `At ${hourLabel(h)}`;
+      // "Now" is Toronto time, whatever the viewer's device clock says. There is
+      // no forecasting: the hour is read fresh on every request, so a tab left
+      // open never routes for a stale hour.
+      const torontoClock = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Toronto",
+        hour: "numeric",
+        hourCycle: "h23",
+      });
+      function torontoHour() {
+        const hour = Number(torontoClock.format(new Date()));
+        return Number.isInteger(hour) && hour >= 0 && hour <= 23
+          ? hour
+          : new Date().getHours();
+      }
+      // The ETA is the largest text on a card; the score and collision count
+      // sit below it in smaller type.
+      function renderEta(key, seconds) {
+        const minutes = Math.round(seconds / 60);
+        const value = document.createElement("span");
+        value.textContent =
+          seconds > 0 && minutes < 1
+            ? "<1"
+            : minutes >= 60
+              ? `${Math.floor(minutes / 60)}h ${minutes % 60}`
+              : String(minutes);
+        const unit = document.createElement("span");
+        unit.className = "eta-unit";
+        unit.textContent = "min";
+        $(`${key}-eta`).replaceChildren(value, unit);
+      }
+      function renderSafety(key, route) {
+        const safety = route.safety;
+        $(`${key}-score`).textContent = String(safety.score);
+        const parts = [`Recorded collisions −${safety.collision_penalty}`];
+        if (safety.traffic_penalty !== null)
+          parts.push(`Live traffic −${safety.traffic_penalty}`);
+        $(`${key}-score-line`).title = `Points lost: ${parts.join(" · ")}`;
+        const count = route.ksi_total;
+        $(`${key}-caption`).textContent =
+          `${count.toLocaleString()} recorded cyclist KSI collision${count === 1 ? "" : "s"} along this path`;
       }
       const reducedMotion = matchMedia(
         "(prefers-reduced-motion: reduce)",
@@ -1405,7 +1404,8 @@
         const request = state.request;
         state.controller = new AbortController();
         show("loading");
-        $("comparison-hour").textContent = `At ${hourLabel(state.hour)}`;
+        const hour = torontoHour();
+        $("comparison-hour").textContent = `Right now · ${hourLabel(hour)}`;
         const timer = setTimeout(() => {
           if (request === state.request) state.controller.abort("timeout");
         }, 20000);
@@ -1417,7 +1417,8 @@
               origin: state.origin,
               destination: state.destination,
               level: state.level,
-              hour: state.hour,
+              hour,
+              traffic: traffic.on,
               city: "toronto",
             }),
             signal: state.controller.signal,
@@ -1457,10 +1458,13 @@
           state.markers[1]?.setLatLng(data.snapped.destination);
           for (const key of ["direct", "safer"]) {
             $(`${key}-metrics`).textContent =
-              `${(data[key].distance_m / 1000).toFixed(1)} km · ${Math.round(data[key].duration_s / 60)} min`;
-            $(`${key}-count`).textContent =
-              data[key].ksi_total.toLocaleString();
+              `${(data[key].distance_m / 1000).toFixed(1)} km`;
+            renderEta(key, data[key].duration_s);
+            renderSafety(key, data[key]);
           }
+          $("score-basis").textContent = data.traffic_used
+            ? "Includes live traffic."
+            : "Collisions only; turn on Live traffic to include congestion.";
           const seconds = data.safer.duration_s - data.direct.duration_s;
           const minutes = Math.round(seconds / 60);
           const time =
@@ -1662,10 +1666,17 @@
           const data = await response.json();
           if (!traffic.on) return;
           if (data.flow) {
-            renderTraffic(data);
-            traffic.fetchedAt = Date.parse(data.meta.flow_fetched_at);
+            const fetchedAt = Date.parse(data.meta.flow_fetched_at);
+            const changed = fetchedAt !== traffic.fetchedAt;
+            const first = traffic.fetchedAt === null;
+            if (changed) renderTraffic(data);
+            traffic.fetchedAt = fetchedAt;
             traffic.message = data.meta.message || "";
             updateTrafficLabel();
+            // The first data after switching on may arrive after the route request,
+            // so redo the route to fold it into the score. Later background
+            // refreshes do not, so the results panel never flickers by itself.
+            if (first) reroute();
           } else if (data.status === "loading") {
             setTrafficStatus("Loading traffic…");
             traffic.retry = setTimeout(loadTraffic, 4000);
@@ -1712,6 +1723,7 @@
         if (!event.target.checked) {
           stopTraffic();
           setTrafficStatus("Off · shows congestion and closures now");
+          reroute();
           return;
         }
         traffic.on = true;
@@ -1826,12 +1838,8 @@
             reroute();
           }),
         );
-        $("hour").addEventListener("input", (event) => {
-          syncHour(Number(event.target.value));
-          reroute();
-        });
-        // Default the slider to the rider's current local hour.
-        syncHour(new Date().getHours());
+        $("comparison-hour").textContent =
+          `Right now · ${hourLabel(torontoHour())}`;
         $("toggle").addEventListener("click", () => {
           const collapsed = document
             .querySelector(".controls")

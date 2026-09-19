@@ -31,7 +31,14 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pyproj import Transformer
+from shapely.geometry import LineString
+from shapely.ops import unary_union
+
+import scoring
+
 log = logging.getLogger(__name__)
+_TO_METRES = Transformer.from_crs("EPSG:4326", "EPSG:32617", always_xy=True)  # UTM 17N, as routing.py
 
 API_BASE = "https://data.traffic.hereapi.com/v7"
 DEFAULT_BOUNDS = [[43.6275, -79.4454], [43.6989, -79.3460]]  # [[south, west], [north, east]]
@@ -225,7 +232,58 @@ def normalize_incidents(payload):
     return {"type": "FeatureCollection", "features": features}
 
 
-# --- configuration --------------------------------------------------------------------------
+# --- matching routes to congestion -----------------------------------------------------------
+
+def _line_parts(geometry):
+    """The line pieces of a shapely result, which may be one line or a collection."""
+    if geometry.is_empty:
+        return []
+    if geometry.geom_type == "LineString":
+        return [geometry]
+    if hasattr(geometry, "geoms"):
+        return [part for child in geometry.geoms for part in _line_parts(child)]
+    return []
+
+
+class CongestionIndex:
+    """Where one flow snapshot reports congestion, for matching routes against it.
+
+    Built in metres from the flow collection the browser also receives. Closed roads
+    are left out: a closure to cars says nothing about whether a bike can pass.
+    """
+
+    def __init__(self, area):
+        self._area = area
+
+    @classmethod
+    def from_flow(cls, collection):
+        buffers = []
+        for feature in (collection or {}).get("features") or []:
+            props = feature.get("properties") or {}
+            if props.get("closed") or (props.get("jf") or 0) < scoring.CONGESTED_JAM_FACTOR:
+                continue
+            for line in (feature.get("geometry") or {}).get("coordinates") or []:
+                if len(line) >= 2:
+                    buffers.append(LineString([_TO_METRES.transform(lng, lat) for lng, lat in line])
+                                   .buffer(scoring.TRAFFIC_MATCH_M))
+        return cls(unary_union(buffers) if buffers else None)
+
+    def share(self, coordinates):
+        """Fraction (0 to 1) of a route, given as [lng, lat] points, riding along congested roads.
+
+        Overlaps shorter than MIN_OVERLAP_M are crossings, not riding along the road, and are ignored.
+        """
+        if self._area is None or len(coordinates) < 2:
+            return 0.0
+        route = LineString([_TO_METRES.transform(lng, lat) for lng, lat in coordinates])
+        if route.length == 0:
+            return 0.0
+        along = sum(part.length for part in _line_parts(route.intersection(self._area))
+                    if part.length >= scoring.MIN_OVERLAP_M)
+        return min(1.0, along / route.length)
+
+
+# --- configuration--------------------------------------------------------------------------
 
 def load_env_file(path, environ=None):
     """Load KEY=VALUE lines from a .env file without overriding real variables."""
@@ -282,6 +340,8 @@ class TrafficCache:
         self._breaker_until = 0.0
         self._rejected = False
         self._version = 0
+        self._index = None                      # CongestionIndex for the snapshot at _index_version
+        self._index_version = -1
         self._load_usage()
 
     @classmethod
@@ -454,6 +514,25 @@ class TrafficCache:
                     "daily": {"used": self._usage["day_used"], "limit": self._daily_cap},
                     "breaker_open": now < self._breaker_until,
                     "key_rejected": self._rejected}
+
+    def congestion_index(self):
+        """An index of the cached flow's congested roads, or None without fresh data.
+
+        Reads the snapshot only. It never calls HERE, so a route request cannot spend quota.
+        """
+        with self._state:
+            flow = self._feeds["flow"]
+            if self._client is None or flow.data is None:
+                return None
+            if self._clock() - flow.fetched_at > 2 * flow.base_ttl:
+                return None                     # stale: ignore rather than score against old traffic
+            if self._index_version == self._version:
+                return self._index
+            data, version = flow.data, self._version
+        index = CongestionIndex.from_flow(data)  # built outside the lock; it can take a moment
+        with self._state:
+            self._index, self._index_version = index, version
+        return index
 
     def _budget_view(self):
         return {"used": self._usage["used"], "limit": self._budget, "month": self._usage["month"]}

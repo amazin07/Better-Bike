@@ -92,12 +92,28 @@ try {
     await evaluate("state.routes.length === 2 && state.markers.length === 2"),
   );
   const actual = await evaluate(
-    "({direct:Number($('direct-count').textContent),safer:Number($('safer-count').textContent),delta:$('delta').textContent})",
+    "({direct:parseInt($('direct-caption').textContent.replace(/,/g,'')),safer:parseInt($('safer-caption').textContent.replace(/,/g,'')),directScore:Number($('direct-score').textContent),saferScore:Number($('safer-score').textContent),delta:$('delta').textContent})",
   );
   assert(Number.isInteger(actual.direct) && Number.isInteger(actual.safer));
+  assert(
+    [actual.directScore, actual.saferScore].every(
+      (score) => Number.isInteger(score) && score >= 0 && score <= 100,
+    ),
+  );
   if (actual.safer > actual.direct)
     assert(actual.delta.includes("more recorded"));
   checks.push("Two map clicks produce real route counts and honest comparison");
+  assert(
+    await evaluate(
+      "/^(<1|\\d+)min$/.test($('direct-eta').textContent) && $('direct-caption').textContent.includes('recorded cyclist KSI collision')",
+    ),
+  );
+  assert(
+    await evaluate(
+      "(() => { const size = (id) => parseFloat(getComputedStyle($(id)).fontSize); return ['direct','safer'].every((k) => size(k + '-eta') > Math.max(size(k + '-score-line'), size(k + '-score'), size(k + '-caption'), size(k + '-metrics'))); })()",
+    ),
+  );
+  checks.push("ETA is the largest text; score and collision count sit below it");
   await screenshot("desktop-route");
 
   await evaluate(`window.originalFetch=fetch;window.routeBodies=[];
@@ -105,25 +121,34 @@ try {
     document.querySelector('[data-level="1"]').click();`);
   await waitFor("window.routeBodies.length === 1 && !$('results').hidden");
   assert.equal(await evaluate("window.routeBodies.at(-1).level"), 1);
-  await evaluate(
-    "$('hour').value=22;$('hour').dispatchEvent(new Event('input'));",
+  // There is no time slider: the hour is always Toronto's current hour.
+  assert.equal(await evaluate("document.getElementById('hour')"), null);
+  assert.equal(
+    await evaluate("window.routeBodies.at(-1).hour === torontoHour()"),
+    true,
   );
-  await waitFor("window.routeBodies.length === 2 && !$('results').hidden");
-  assert.equal(await evaluate("window.routeBodies.at(-1).hour"), 22);
-  assert.equal(await evaluate("$('hour-display').textContent"), "10pm");
-  checks.push("Confidence and hour controls refetch without submission");
+  assert.equal(await evaluate("window.routeBodies.at(-1).traffic"), false);
+  assert(
+    await evaluate("$('comparison-hour').textContent.startsWith('Right now')"),
+  );
+  checks.push("Confidence control refetches; hour is always Toronto's now");
 
-  await evaluate(`window.fetch=async(url,options)=>{const response=await window.originalFetch(url,options);
+  await evaluate(`window.realTorontoHour=torontoHour;
+    window.fetch=async(url,options)=>{const response=await window.originalFetch(url,options);
     if(url==='/api/route'&&JSON.parse(options.body).hour===23)await new Promise(r=>setTimeout(r,650));return response;};
-    state.hour=23;getRoute();`);
+    window.torontoHour=()=>23;getRoute();`);
   await new Promise((resolve) => setTimeout(resolve, 100));
-  await evaluate("state.hour=7;getRoute();");
+  await evaluate("window.torontoHour=()=>7;getRoute();");
   await waitFor(
-    "!$('results').hidden && $('comparison-hour').textContent === 'At 7am'",
+    "!$('results').hidden && $('comparison-hour').textContent === 'Right now · 7am'",
   );
   await new Promise((resolve) => setTimeout(resolve, 700));
-  assert.equal(await evaluate("$('comparison-hour').textContent"), "At 7am");
-  checks.push("Delayed responses cannot overwrite a newer selection");
+  assert.equal(
+    await evaluate("$('comparison-hour').textContent"),
+    "Right now · 7am",
+  );
+  await evaluate("window.torontoHour=window.realTorontoHour;");
+  checks.push("Delayed responses cannot overwrite a newer request");
 
   await evaluate(
     "window.fetch=window.originalFetch;map.fire('click',{latlng:L.latLng(43.665,-79.40)});void 0;",

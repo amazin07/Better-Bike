@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from routing import Collision, RouteError, Router
+from scoring import safety_score
 from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
 from firebase_config import public_firebase_config
 
@@ -47,6 +48,8 @@ def validate_payload(payload):
         raise ValueError("level must be 1, 2, or 3.")
     if type(payload.get("hour")) is not int or not 0 <= payload["hour"] <= 23:
         raise ValueError("hour must be an integer from 0 to 23.")
+    if "traffic" in payload and type(payload["traffic"]) is not bool:
+        raise ValueError("traffic must be true or false.")
     return payload
 
 
@@ -120,10 +123,19 @@ def create_app(router=None, cache_path=None, traffic=None):
         if not router:
             return jsonify(error="Routing is unavailable. The collision map is still shown below."), 503
         try:
-            return jsonify(router.route(payload["origin"], payload["destination"],
-                                        payload["level"], payload["hour"]))
+            result = router.route(payload["origin"], payload["destination"],
+                                  payload["level"], payload["hour"])
         except RouteError as error:
             return jsonify(error=str(error)), 422
+        # Live traffic joins the score only when the client asks (its Live traffic switch is on)
+        # and the server already holds fresh data. This never calls HERE.
+        index = traffic.congestion_index() if payload.get("traffic") else None
+        for key in ("direct", "safer"):
+            path = result[key]
+            share = index.share(path["geometry"]["coordinates"]) if index is not None else None
+            path["safety"] = safety_score(path["ksi_total"], path["ksi_fatal"], path["distance_m"], share)
+        result["traffic_used"] = index is not None
+        return jsonify(result)
 
     @app.get("/api/traffic")
     def traffic_overlay():

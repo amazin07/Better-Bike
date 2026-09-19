@@ -2,7 +2,8 @@
 
 A browser website that compares a shortest-distance bike route with a route
 weighted by recorded cyclist collision history, bike infrastructure, rider
-confidence, and departure hour. Built for Future Legends UofT 2026.
+confidence, and the current Toronto hour, and shows each route's ETA and a safety
+score. Built for Future Legends UofT 2026.
 
 Read [AGENTS.md](AGENTS.md) for the shared teammate/agent handoff and
 [the original specification](docs/safer-ride-spec.md) for the product brief.
@@ -20,8 +21,9 @@ python3 -m venv .venv
 ```
 
 Open **http://127.0.0.1:5001**. Click two map locations, or search a local landmark
-or street intersection. Change the confidence buttons or the hour slider to
-recalculate. A third map click starts a new route. The sample ride is a real
+or street intersection. Change the confidence buttons to recalculate; routes
+always use the current Toronto hour (there is no time-of-day control and no
+forecasting). A third map click starts a new route. The sample ride is a real
 calculation, never a canned response.
 
 The first data build requires internet and can take several minutes. It downloads
@@ -50,9 +52,11 @@ server. Do not use Flask's development server for a public deployment.
 ## Live traffic overlay (optional, HERE)
 
 A **Live traffic** switch on the map draws HERE's current congestion, road
-closures, and incidents over the downtown map. It is display-only: routes, route
-costs, and the collision model never use it, and route requests still make no
-external calls. The overlay is **off until someone turns the switch on**.
+closures, and incidents over the downtown map. Routes, route costs, and the
+collision model never use it, and route requests still make no external calls.
+While the switch is on, the server's cached snapshot also feeds the traffic part of
+the safety score (see Safety score) without calling HERE. The overlay is **off
+until someone turns the switch on**.
 
 ```sh
 cp .env.example .env      # then set HERE_API_KEY; .env is git-ignored
@@ -140,7 +144,10 @@ Source years are 2006–2026, with the latest source collision dated August 29,
 
 - `GET /api/health`: readiness, graph size, collision counts, coverage, build date.
 - `POST /api/route`: direct/weighted route geometries, metres, seconds, distinct
-  collision counts, fatal subsets, collision points, and snapped coordinates.
+  collision counts, fatal subsets, collision points, snapped coordinates, and a
+  `safety` score per route (see Safety score). The optional boolean `traffic` asks
+  for live traffic to be included in the score; `traffic_used` reports whether it
+  was. Sending `traffic` never calls HERE.
 - `GET /api/places?q=...`: local landmark/intersection search; not arbitrary
   address geocoding and no third-party geocoder.
 - `GET /api/config`: browser basemap configuration.
@@ -208,11 +215,12 @@ never generate artificial changes for demonstration.
 
 The included example, **Kensington Market → Christie Pits Park**, has one recorded
 collision on the comfortable route versus eight on the direct route at 8am in
-this snapshot. For a real time-dependent path change, search **U of T →
-St. Lawrence Market** and compare 8am with 10pm (five vs seven recorded collisions
-on the suggested paths; four on the direct route). These are all-time route
-counts, not counts of events occurring at those departure times. Results may
-change after a data refresh.
+this snapshot. The API's `hour` field still changes routes (U of T → St. Lawrence
+Market gives five vs seven recorded collisions on the suggested paths at 8am vs
+10pm; four on the direct route), but the website has no time control and always
+sends the current Toronto hour, so it does no forecasting. Route counts are
+all-time, not counts of events occurring at that hour. Results may change after a
+data refresh.
 
 ### Weighting comparison
 
@@ -251,6 +259,35 @@ still counts once. The UI calls these **recorded cyclist KSI collisions**, not
 individual injured people. All-time counts remain all-time when the hour changes.
 Percent differences handle increases, ties, and zero baselines without division
 by zero.
+
+### Safety score
+
+Each route card shows the ETA as its largest text, then a **safety score out of
+100** (`scoring.py`) and the recorded-collision count:
+
+```text
+score = 100 − collision penalty − traffic penalty, clamped to 0–100
+```
+
+- **Collision penalty:** distinct recorded cyclist KSI collisions on the path, a
+  fatal collision counting 3× (the routing model's weights), divided by the
+  route's length in km (at least 1 km, so a very short trip is not blown up),
+  times 10, capped at 70. The scale was chosen on all 132 landmark-to-landmark
+  routes so scores spread out: medians of about 73 for the direct route and 82
+  for the suggested one, ranging from about 30 to 92.
+- **Traffic penalty:** only when the **Live traffic** switch is on and the server
+  already holds fresh HERE data. The share of the route that runs along roads HERE
+  reports as congested (`jamFactor` ≥ 4, matched within 15 m, ignoring crossings
+  shorter than 40 m) times 30. Closed roads are ignored: a closure to cars says
+  nothing about a bike. A route request never calls HERE; without traffic data the
+  score uses collisions only, and the results panel says which it used.
+- The score **compares routes; it is not a prediction.** It inherits every limit
+  below (KSI only, no exposure denominator, reporting lag), and congested car
+  traffic is not the same as danger to a cyclist: the suggested route often follows
+  busier bike-lane streets and can lose more traffic points than the direct one.
+  Hover a score to see the points lost to each input.
+- There is no time control and no forecasting. The website requests the current
+  **Toronto** hour, read fresh on every route request.
 
 ## Limitations
 
@@ -297,12 +334,14 @@ docs/safer-ride-spec.md      Original supplied specification
 index.html                 Responsive, no-build website
 app.py                     Flask website, validation, and API
 routing.py                 CSV parser, node risk, route calculations
+scoring.py                 Safety score (collisions + optional live traffic)
 traffic.py                 Opt-in HERE live-traffic cache (budget-capped, in-memory)
 .env.example               Template for the git-ignored local .env
 prepare_data.py             Repeatable official-data download/cache build
 static/collisions.json     Minimal real records for the initial map
 tests/test_routing.py       Parser, model, and API regression tests
 tests/test_traffic.py       Traffic cache, HERE client, and overlay API tests (no network)
+tests/test_scoring.py       Score formula, congestion matching, and score API tests
 scripts/browser_smoke.mjs   Desktop/mobile interaction and failure checks
 scripts/evaluate_routing.py Original/current real-route comparison
 docs/routing-evaluation.json Recorded comparison with source provenance
@@ -333,6 +372,7 @@ project. No test data is written to the live database.
 For the browser smoke check, start Flask, start Chrome with
 `--remote-debugging-port=9224 --user-data-dir=/tmp/safer-ride-browser`, and open
 `http://127.0.0.1:5001`. With Node 22 or newer, run
-`node scripts/browser_smoke.mjs`. It checks clicks, local search, hour/confidence
-requests, stale responses, routing failure, and mobile controls. Screenshots go
+`node scripts/browser_smoke.mjs`. It checks clicks, local search, the ETA-first
+cards and scores, confidence requests, stale responses, routing failure, and mobile
+controls. Screenshots go
 to the ignored `artifacts/` directory.

@@ -8,14 +8,16 @@ the shared handoff for every teammate and coding agent working in this repo.
 Build a **website** for Toronto cyclists: a full-viewport Leaflet map backed by
 Flask and a locally cached OSMnx/NetworkX bike graph. Compare the shortest route
 with a route weighted by recorded cyclist collision history, rider confidence,
-and departure hour. The user explicitly confirmed the browser website format.
+and the current Toronto hour. The user explicitly confirmed the browser website
+format.
 
 Toronto routing is implemented. The user subsequently authorized Firebase
 Google sign-in, private bike registration, optional rental listings, and rental
 requests. This supersedes the original spec's no-accounts/database scope.
 No Stripe, New York, turn-by-turn navigation, or real payments.
-Live HERE traffic exists only as a display-only,
-opt-in map overlay (`traffic.py`, see README); it never feeds routing.
+Live HERE traffic exists only as a display-only, opt-in map overlay
+(`traffic.py`, see README); it never feeds routing, and only while the switch is
+on does it feed the traffic term of the safety score.
 Never fabricate collision statistics.
 
 ## Decisions and data pitfalls
@@ -30,7 +32,17 @@ Never fabricate collision statistics.
   and preserve fatal severity if any row reports it.
 - A deduplicated collision is not a count of injured people. Label UI totals
   as recorded cyclist KSI collisions, explaining that KSI means killed or
-  seriously injured. Do not claim a predicted probability of injury or safety.
+  seriously injured. Do not claim a predicted probability of injury.
+- The UI shows a 0-100 **safety score** per route (`scoring.py`), an explicit
+  exception the user approved to the old "do not claim safety" rule. It is a
+  heuristic index for comparing routes, not a prediction: keep the on-screen note
+  saying so, never describe it as a probability or guarantee, and remember that no
+  recorded collisions is not proof of safety. Traffic joins the score only while
+  the Live traffic switch is on and fresh HERE data is cached; a route request must
+  never call HERE. Constants and rationale live in `scoring.py` and the README.
+- There is **no time-of-day control and no forecasting**. The website always sends
+  the current Toronto hour, read fresh on every request; the API `hour` field and
+  the model's hour weighting remain.
 - Direct route is **pure distance**, without lane multipliers. This resolves
   a contradiction between the spec's alpha=0 formula and its stated baseline.
 - Risk attaches to graph nodes within 30 metres, never to nearest road edges.
@@ -62,6 +74,7 @@ Never fabricate collision statistics.
 
 `prepare_data.py`: download, clean, cache graph, match infrastructure, attach risk.
 `routing.py`: parsing and routing model. `app.py`: Flask API and website.
+`scoring.py`: safety score formula and constants (see README).
 `traffic.py`: opt-in HERE live-traffic overlay cache; memory-only and call-budget
 capped (see README). `.env.example`: template for the git-ignored local `.env`.
 `index.html`: single-file, no-build Leaflet frontend. `tests/`: model/API tests.
@@ -121,15 +134,17 @@ Leaflet CDN assets still need internet in the browser.
 ## Current handoff
 
 The Toronto website, local data builder, Flask API, real collision layer, rider
-controls, hour slider, local place search, and regression tests are implemented.
+controls, ETA-first route cards with a safety score, local place search, and
+regression tests are implemented.
 The verified local build has 12,294 nodes, 29,231 edges, and 442 cyclist KSI
 collisions in coverage (370 within 30 metres of nodes). Sources span 2006–2026.
 See README for setup and model limitations; the public map JSON is committed,
 but each teammate must run `prepare_data.py` for their local graph cache.
 
 The opt-in live HERE traffic overlay is implemented (`traffic.py`, `/api/traffic`,
-the "Live traffic" switch, `tests/test_traffic.py`). It is display-only and never
-feeds routing. Protect the shared HERE quota: use `HERE_FIXTURE_DIR` for UI work,
+the "Live traffic" switch, `tests/test_traffic.py`). It never feeds routing; it
+feeds the safety score only while the switch is on (`tests/test_scoring.py`).
+Protect the shared HERE quota: use `HERE_FIXTURE_DIR` for UI work,
 keep the real key on one demo instance, and never commit `.env` or HERE data.
 Unresolved: the real Traffic free allowance (default budget 2500 is a placeholder)
 and whether HERE's terms allow the shared server cache. See the README limits.
