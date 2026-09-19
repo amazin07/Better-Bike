@@ -1,4 +1,4 @@
-# Safer Ride · Toronto
+# BikeBetter · Toronto
 
 A browser website that compares a shortest-distance bike route with a route
 weighted by recorded cyclist collision history, bike infrastructure, rider
