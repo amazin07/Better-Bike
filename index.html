@@ -369,13 +369,15 @@
           transition: none;
         }
       }
-      /* Hangs off the right edge of the left panel. It is absolutely positioned,
-         so it adds no height to that panel and the legend cannot cover it. On
-         phones it drops into the panel's normal flow (see the max-width: 760px
-         rules). */
+      /* Centred under the "Map | Rentals" nav. It lives inside the left panel but
+         is absolutely positioned, so it adds no height to that panel and the
+         legend cannot cover it. 24px is the panel's left offset; 60px clears the
+         nav. On phones it drops into the panel's normal flow (see the
+         max-width: 760px rules). */
       .traffic-control {
-        top: 0;
-        left: calc(100% + 16px);
+        top: 60px;
+        left: calc(50vw - 24px);
+        transform: translateX(-50%);
         width: max-content;
         max-width: 300px;
         padding: 10px 14px 11px;
@@ -749,7 +751,7 @@
         }
         .traffic-control {
           min-width: 150px;
-          max-width: calc(100vw - 645px);
+          max-width: calc(100vw - 674px);
         }
       }
       @media (max-width: 760px) {
@@ -911,6 +913,7 @@
         }
         .traffic-control {
           position: static;
+          transform: none;
           width: auto;
           min-width: 0;
           max-width: none;
@@ -1134,6 +1137,7 @@
               class="switch"
               id="traffic-toggle"
               role="switch"
+              autocomplete="off"
               aria-describedby="traffic-status"
             />
           </div>
@@ -1790,6 +1794,9 @@
           ]);
         });
         $("reset").addEventListener("click", reset);
+        // A reload or back navigation can restore a checked box. Always start off,
+        // in sync with the app, so a reload never spends HERE calls by itself.
+        $("traffic-toggle").checked = false;
         $("traffic-toggle").addEventListener("change", onTrafficToggle);
         document.addEventListener("visibilitychange", () => {
           if (!document.hidden) loadTraffic();
