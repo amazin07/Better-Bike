@@ -12,6 +12,9 @@ firebase-debug.*
 firestore-debug.*
 ui-debug.*
 
+.vercel/
+public/
+
 .projects/cache
 .projects/vault
 .projects/state.test.json
@@ -19,6 +22,5 @@ ui-debug.*
 .env
 .env.*
 !.env.example
+
 .projects/
-.vercel/
-public/

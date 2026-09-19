@@ -479,5 +479,6 @@ For the presentation, [labelled demo listings and missing-bike reports](docs/dem
 are available. The guide includes repeatable seeding and precise cleanup commands;
 these records do not represent real rentals, thefts, or payable rewards.
 
+Live website: [bikebetter.vercel.app](https://bikebetter.vercel.app).
 For hosted deployment, see [Vercel setup](docs/vercel-deployment.md). The committed
 JSON routing snapshot lets the hosted site calculate routes without a local pickle.

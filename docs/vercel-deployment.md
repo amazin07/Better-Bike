@@ -1,5 +1,10 @@
 # Vercel deployment
 
+Live site: https://bikebetter.vercel.app (Vercel Hobby, project `bikebetter`,
+team `amazin07-stripe`). Initial deployment completed on 2026-09-19.
+GitHub source is `amazin07/Future-Legends-UofT-2026`, branch `main`.
+Deployments currently use the CLI; Git push alone does not trigger a deployment.
+
 The Flask preset uses Python 3.13, `app.py`, and `vercel.json`. The build stages
 the existing static files and Stripe's npm loader into `public/static` for the CDN.
 `requirements.txt` contains runtime dependencies; use `requirements-dev.txt` for
@@ -47,6 +52,14 @@ server identity only the Firestore and Firebase Auth access required for payment
 Add the stable hostname to Firebase Authentication's authorized domains. Configure
 the two signed Stripe endpoints and events listed in `stripe-connect-plan.md`;
 the local Stripe CLI listener's secrets cannot be reused for hosted endpoints.
+
+The initial deployment has these variables configured, with a dedicated Firebase
+identity `bikebetter-vercel@blyatbike.iam.gserviceaccount.com`. Its only project
+roles are `roles/datastore.user` and `roles/firebaseauth.viewer`. The private key
+was transferred directly to Vercel's encrypted environment, without writing it
+to the repository. Both `bikebetter.vercel.app` and the team-qualified production
+alias are authorized for Firebase sign-in. Hosted Stripe endpoints use the
+canonical `bikebetter.vercel.app` hostname and sandbox keys only.
 
 **Live HERE traffic needs additional hosting work:** the current in-memory cache
 and filesystem quota counter are designed for one persistent server. Vercel

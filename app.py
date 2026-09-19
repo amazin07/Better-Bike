@@ -200,6 +200,9 @@ def create_app(router=None, cache_path=None, traffic=None):
 
 if __name__ == "__main__":
     load_env_file(ROOT / ".env")  # only the dev server reads .env; deployments set real variables
-    create_app().run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5001)), debug=False)
-elif os.getenv("VERCEL"):
-    app = create_app()
+
+# Vercel discovers this assignment statically, so it must be at module scope.
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5001)), debug=False)

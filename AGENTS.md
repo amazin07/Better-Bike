@@ -232,6 +232,9 @@ This repository is initialized for the Stripe project "Future-Legends-UofT-2026"
 
 ## Vercel hosting
 
+- Live site: `https://bikebetter.vercel.app`, free Hobby plan. CLI deployments;
+  GitHub push does not yet trigger a build. Firebase and sandbox Stripe secrets
+  are configured in Vercel, never in the repository or frontend.
 - See `docs/vercel-deployment.md`. The Flask entrypoint loads a committed, minimal
   JSON routing snapshot in Vercel; trusted pickle and raw data remain local.
 - Regenerate `routing-data/toronto.json.gz` using `scripts/export_routing_bundle.py`
