@@ -237,9 +237,10 @@ This repository is initialized for the Stripe project "Future-Legends-UofT-2026"
 - Live site: `https://bikebetter.vercel.app`, free Hobby plan. CLI deployments;
   GitHub push does not yet trigger a build. Firebase and sandbox Stripe secrets
   are configured in Vercel, never in the repository or frontend.
-- Commit the CLI-generated `.projects/state.json` project manifest: Stripe
-  hackathon submission requires it. Do not hand-edit it. Keep all other
-  `.projects` files (especially vault/cache/local state) and `.env` ignored.
+- Commit the CLI-generated `.projects/state.json` and `.projects/state.local.json`
+  manifests: Stripe hackathon submission requires both configuration and resource
+  associations. Do not hand-edit them. Keep all other `.projects` files (especially
+  vault/cache/test state) and `.env` ignored. Scan manifests for credentials before pushing.
 - See `docs/vercel-deployment.md`. The Flask entrypoint loads a committed, minimal
   JSON routing snapshot in Vercel; trusted pickle and raw data remain local.
 - Regenerate `routing-data/toronto.json.gz` using `scripts/export_routing_bundle.py`

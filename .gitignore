@@ -20,9 +20,10 @@ public/
 .projects/vault
 .projects/state.test.json
 .projects/state.local.test.json
-# Share only the CLI-generated project manifest needed by teammates/submissions.
+# Share only the CLI-generated manifests needed by teammates/submissions.
 .projects/*
 !.projects/state.json
+!.projects/state.local.json
 .env
 .env.*
 !.env.example

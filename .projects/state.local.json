@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "project": {
+    "catalog": "prod",
+    "initializedAt": "2026-09-19T21:07:09.310Z",
+    "merchantDisplayName": "BetterBike",
+    "merchantId": "acct_1UHSwAFtXFtp7d7P",
+    "projectId": "project_61VQtQqVOdzFKs2bJ16VQqtWKCA8hoygKRhT5KDpATfM",
+    "projectName": "Future-Legends-UofT-2026"
+  },
+  "providers": {
+    "vercel": {
+      "accountRequestId": "facctrq_61VQtc1kRFqyKGFYy16VQqtWKCA8hoygKRhT5KDpAIjo",
+      "configuration": {},
+      "linkedAt": "2026-09-19T21:18:44.228Z",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "redirectUrl": null,
+      "requestedAt": "2026-09-19T21:18:44.228Z",
+      "status": "complete"
+    }
+  },
+  "resources": {
+    "bikebetter-web": {
+      "configuration": {
+        "name": "bikebetter"
+      },
+      "createdAt": "2026-09-19T21:19:16.939Z",
+      "lastRevealedAt": "2026-09-19T21:19:17.354Z",
+      "lastStatus": "complete",
+      "name": "bikebetter-web",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61VQtcYjNLlsiDddq16VQqtWKCA8hoygKRhT5KDpAWJE",
+      "serviceId": "project"
+    },
+    "vercel-plan": {
+      "configuration": {},
+      "createdAt": "2026-09-19T21:18:46.438Z",
+      "lastRevealedAt": "2026-09-19T21:18:46.656Z",
+      "lastStatus": "complete",
+      "name": "vercel-plan",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61VQtc4pHsIb58NRK16VQqtWKCA8hoygKRhT5KDpAX1U",
+      "serviceId": "hobby"
+    }
+  }
+}
