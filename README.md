@@ -309,8 +309,26 @@ docs/routing-evaluation.json Recorded comparison with source provenance
 data/                      Ignored raw data and graph cache
 ```
 
-Optional rentals, Stripe checkout, accounts, New York, and saved routes are not
-implemented. The shipped scope is the Toronto routing website.
+## Bike registration and rentals
+
+Open **http://127.0.0.1:5001/rentals** for Google sign-in, private bike
+registration, optional rental listings, and rental requests. Serial numbers and
+owner notes stay private. Owners accept or decline requests and mark bikes
+returned. Payments and pickup are arranged directly; Stripe and saved routes
+are not implemented.
+
+See [Firebase setup and teammate handoff](docs/firebase-setup.md) for the current
+cloud provisioning status, data permissions, setup commands, and emulator tests.
+Copy the Firebase web key into the ignored `.env` as `FIREBASE_API_KEY` before
+starting Flask. The map remains independent of Firebase.
+
+```sh
+npm ci
+npm run test:firebase
+```
+
+Firebase tests require Java 21 and Firebase CLI and use a separate local demo
+project. No test data is written to the live database.
 
 For the browser smoke check, start Flask, start Chrome with
 `--remote-debugging-port=9224 --user-data-dir=/tmp/safer-ride-browser`, and open

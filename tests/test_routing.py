@@ -218,6 +218,21 @@ def test_absent_cache_keeps_website_available(tmp_path):
 
 def test_carto_key_is_optional_browser_configuration(client, monkeypatch):
     monkeypatch.delenv("CARTO_BASEMAP_KEY", raising=False)
-    assert client.get("/api/config").json == {"carto_key": ""}
+    assert client.get("/api/config").json["carto_key"] == ""
     monkeypatch.setenv("CARTO_BASEMAP_KEY", "test-key")
-    assert client.get("/api/config").json == {"carto_key": "test-key"}
+    assert client.get("/api/config").json["carto_key"] == "test-key"
+
+
+def test_firebase_configuration_never_exposes_server_credentials(client, monkeypatch):
+    monkeypatch.setenv("HERE_API_KEY", "server-only-secret")
+    monkeypatch.setenv("FIREBASE_API_KEY", "public-firebase-test-key")
+    monkeypatch.delenv("FIREBASE_USE_EMULATORS", raising=False)
+    result = client.get("/api/config")
+    assert result.json["firebase"]["apiKey"] == "public-firebase-test-key"
+    assert result.json["firebase"]["projectId"] == "blyatbike"
+    assert "server-only-secret" not in result.text
+    monkeypatch.setenv("FIREBASE_USE_EMULATORS", "1")
+    local = client.get("/api/config").json["firebase"]
+    assert local["projectId"] == "demo-safer-ride"
+    assert local["apiKey"] == "demo-api-key"
+    assert local["useEmulators"] is True

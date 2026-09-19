@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function text(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
+    }
+    function bikePath(id) { return /databases/$(database)/documents/bikes/$(id); }
+    function rentalPath(id) { return /databases/$(database)/documents/rentalRequests/$(id); }
+    function ownsBike(id) {
+      return signedIn() && get(bikePath(id)).data.ownerUid == request.auth.uid;
+    }
+    function validBike(b) {
+      return b.keys().hasAll(['ownerUid','brand','model','type','colour','frameSize','neighbourhood',
+        'description','rateHourCents','rateDayCents','published','available','activeRequestId','createdAt','updatedAt'])
+        && b.keys().hasOnly(['ownerUid','brand','model','type','colour','frameSize','neighbourhood',
+        'description','rateHourCents','rateDayCents','published','available','activeRequestId','createdAt','updatedAt'])
+        && b.ownerUid == request.auth.uid
+        && text(b.brand, 1, 60) && text(b.model, 1, 80)
+        && b.type in ['Hybrid','Road','City','Mountain','Electric','Cargo','Other']
+        && text(b.colour, 1, 40) && text(b.frameSize, 0, 40)
+        && text(b.neighbourhood, 0, 80) && text(b.description, 0, 1000)
+        && b.rateHourCents is int && b.rateHourCents >= 0 && b.rateHourCents <= 100000
+        && b.rateDayCents is int && b.rateDayCents >= 0 && b.rateDayCents <= 100000
+        && b.published is bool && b.available is bool && text(b.activeRequestId, 0, 128)
+        && (!b.published || (b.neighbourhood.size() > 0 && b.rateHourCents > 0 && b.rateDayCents > 0))
+        && (b.activeRequestId == '' || b.available == false)
+        && b.createdAt is timestamp && b.updatedAt == request.time;
+    }
+    function validBikeTransition(id) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return after.activeRequestId == before.activeRequestId
+        || (before.activeRequestId == '' && before.available && before.published
+            && after.activeRequestId != '' && !after.available
+            && getAfter(rentalPath(after.activeRequestId)).data.bikeId == id
+            && getAfter(rentalPath(after.activeRequestId)).data.status == 'accepted')
+        || (before.activeRequestId != '' && after.activeRequestId == ''
+            && getAfter(rentalPath(before.activeRequestId)).data.status == 'completed');
+    }
+    match /bikes/{bikeId} {
+      allow read: if resource.data.published == true || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if signedIn() && validBike(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.activeRequestId == '';
+      allow update: if ownsBike(bikeId) && validBike(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validBikeTransition(bikeId);
+      allow delete: if ownsBike(bikeId) && resource.data.activeRequestId == '';
+
+      match /private/{privateId} {
+        allow read: if ownsBike(bikeId);
+        allow create, update: if signedIn() && privateId == 'details'
+          && getAfter(bikePath(bikeId)).data.ownerUid == request.auth.uid
+          && request.resource.data.keys().hasAll(['serialNumber','notes','updatedAt'])
+          && request.resource.data.keys().hasOnly(['serialNumber','notes','updatedAt'])
+          && text(request.resource.data.serialNumber, 1, 80)
+          && text(request.resource.data.notes, 0, 1000)
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if ownsBike(bikeId);
+      }
+    }
+
+    function validRental(r) {
+      return r.keys().hasAll(['bikeId','bikeTitle','ownerUid','renterUid','renterName','renterEmail',
+        'ownerEmail','startAt','endAt','message','status','rateHourCents','rateDayCents','createdAt','updatedAt'])
+        && r.keys().hasOnly(['bikeId','bikeTitle','ownerUid','renterUid','renterName','renterEmail',
+        'ownerEmail','startAt','endAt','message','status','rateHourCents','rateDayCents','createdAt','updatedAt'])
+        && text(r.bikeId, 1, 128) && text(r.bikeTitle, 1, 150)
+        && text(r.renterName, 1, 100) && text(r.renterEmail, 3, 254)
+        && text(r.ownerEmail, 0, 254) && text(r.message, 0, 500)
+        && r.startAt is timestamp && r.endAt is timestamp && r.endAt >= r.startAt
+        && r.endAt <= r.startAt + duration.value(30, 'd')
+        && r.rateHourCents is int && r.rateDayCents is int
+        && r.status in ['pending','accepted','declined','cancelled','completed']
+        && r.createdAt is timestamp && r.updatedAt == request.time;
+    }
+    function availableBike(r) {
+      let b = get(bikePath(r.bikeId)).data;
+      return b.published && b.available && b.activeRequestId == ''
+        && b.ownerUid == r.ownerUid && b.ownerUid != request.auth.uid
+        && r.bikeTitle == b.brand + ' ' + b.model
+        && r.rateHourCents == b.rateHourCents && r.rateDayCents == b.rateDayCents;
+    }
+    function ownerTransition(id) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return (before.status == 'pending' && after.status == 'declined' && after.ownerEmail == '')
+        || (before.status == 'pending' && after.status == 'accepted'
+            && after.ownerEmail == request.auth.token.email
+            && get(bikePath(before.bikeId)).data.available
+            && get(bikePath(before.bikeId)).data.activeRequestId == ''
+            && getAfter(bikePath(before.bikeId)).data.activeRequestId == id
+            && !getAfter(bikePath(before.bikeId)).data.available)
+        || (before.status == 'accepted' && after.status == 'completed'
+            && after.ownerEmail == before.ownerEmail
+            && getAfter(bikePath(before.bikeId)).data.activeRequestId == '');
+    }
+    match /rentalRequests/{rentalId} {
+      allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.renterUid == request.auth.uid);
+      allow create: if signedIn() && validRental(request.resource.data)
+        && request.resource.data.renterUid == request.auth.uid
+        && request.resource.data.renterEmail == request.auth.token.email
+        && request.resource.data.ownerEmail == '' && request.resource.data.status == 'pending'
+        && request.resource.data.startAt >= request.time - duration.value(1, 'd')
+        && request.resource.data.createdAt == request.time && availableBike(request.resource.data);
+      allow update: if signedIn() && validRental(request.resource.data)
+        && ((resource.data.ownerUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','ownerEmail','updatedAt'])
+            && ownerTransition(rentalId))
+          || (resource.data.renterUid == request.auth.uid && resource.data.status == 'pending'
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])));
+      allow delete: if false;
+    }
+  }
+}

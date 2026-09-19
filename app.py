@@ -11,6 +11,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from routing import Collision, RouteError, Router
 from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
+from firebase_config import public_firebase_config
 
 ROOT = Path(__file__).resolve().parent
 LANDMARKS = [
@@ -102,7 +103,7 @@ def create_app(router=None, cache_path=None, traffic=None):
     @app.get("/api/config")
     def config():
         # CARTO basemap keys are browser-visible; restrict their allowed referrers.
-        return jsonify(carto_key=os.environ.get("CARTO_BASEMAP_KEY", ""))
+        return jsonify(carto_key=os.environ.get("CARTO_BASEMAP_KEY", ""), firebase=public_firebase_config())
 
     @app.get("/api/places")
     def search():

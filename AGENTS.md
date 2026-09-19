@@ -10,9 +10,11 @@ Flask and a locally cached OSMnx/NetworkX bike graph. Compare the shortest route
 with a route weighted by recorded cyclist collision history, rider confidence,
 and departure hour. The user explicitly confirmed the browser website format.
 
-Ship Toronto end to end first. Rentals/Stripe and New York are optional and are
-not part of the current implementation. No accounts, database, turn-by-turn
-navigation, or real payments. Live HERE traffic exists only as a display-only,
+Toronto routing is implemented. The user subsequently authorized Firebase
+Google sign-in, private bike registration, optional rental listings, and rental
+requests. This supersedes the original spec's no-accounts/database scope.
+No Stripe, New York, turn-by-turn navigation, or real payments.
+Live HERE traffic exists only as a display-only,
 opt-in map overlay (`traffic.py`, see README); it never feeds routing.
 Never fabricate collision statistics.
 
@@ -87,6 +89,34 @@ Leaflet CDN assets still need internet in the browser.
 - Test meaningful data/model/API changes, especially deduplication, midnight,
   geometry coordinate order, and multigraph edge selection.
 - Do not add optional product scope until the Toronto routing website works.
+
+## Firebase and bike rentals
+
+- `rentals.html` and `static/rentals.js` are the no-build account/rental UI.
+  `static/firebase-client.js` connects the Firebase web SDK;
+  `static/bike-store.js` contains shared transaction and validation logic.
+- Project: `blyatbike`. Google sign-in only. A registration is private by
+  default; publishing a rental listing is a separate, unchecked option.
+- Public-safe fields live in `bikes/{id}` (readable publicly only if published).
+  Serial numbers and private notes live in `bikes/{id}/private/details` with
+  owner-only rules. Never put private data in the public document: Firestore
+  rules cannot hide individual fields from an otherwise readable document.
+- `rentalRequests/{id}` is readable only by the verified owner and renter.
+  Request creation shares the renter's Google email; acceptance shares the
+  owner's email. UI must disclose this before each action.
+- Acceptance atomically reserves one bike for one request. Completion releases
+  it. Do not replace these transactions with independent writes. This is a
+  simple one-active-rental workflow, not a date-based booking calendar.
+- `firestore.rules` enforces ownership, field types, money in integer cents,
+  price snapshots, valid state transitions, and private/public separation.
+  Test data changes with `npm ci && npm run test:firebase` (Node 22+, Java 21,
+  Firebase CLI). Tests use only `demo-safer-ride` emulators, never live data.
+- `FIREBASE_API_KEY` is read from the ignored `.env` by the dev server. It is
+  browser configuration, not an admin credential. HERE_API_KEY stays server-only.
+  Never commit actual key values or add service-account credentials to the UI.
+- `firebase.json` manages Google auth, rules, and indexes; no Hosting deploy is
+  configured because the website requires its Flask routing backend. See
+  `docs/firebase-setup.md` for service status, setup, and browser testing.
 
 ## Current handoff
 

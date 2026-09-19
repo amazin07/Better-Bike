@@ -7,3 +7,8 @@ data/
 cache/
 *.log
 artifacts/
+node_modules/
+.firebase/
+firebase-debug.*
+firestore-debug.*
+ui-debug.*
