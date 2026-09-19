@@ -110,6 +110,8 @@ Leaflet CDN assets still need internet in the browser.
   `static/bike-store.js` contains shared transaction and validation logic.
 - Project: `blyatbike`. Google sign-in only. A registration is private by
   default; publishing a rental listing is a separate, unchecked option.
+  Live Auth and the default Firestore database (Toronto / northamerica-northeast2)
+  are configured, with rules and indexes deployed as of 2026-09-19.
 - Public-safe fields live in `bikes/{id}` (readable publicly only if published).
   Serial numbers and private notes live in `bikes/{id}/private/details` with
   owner-only rules. Never put private data in the public document: Firestore

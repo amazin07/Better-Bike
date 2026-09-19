@@ -17,18 +17,21 @@ include `localhost`, `127.0.0.1`, `blyatbike.firebaseapp.com`, and
 `blyatbike.web.app`. Add the eventual website hostname in Firebase Authentication
 settings before using sign-in from a deployed website.
 
-Current provisioning blocker: the CLI account can configure Authentication and
-deploy security rules, but lacks `datastore.databases.create`. The project owner
-must grant **Cloud Datastore Owner**, or create the **(default)** Firestore
-database in **Standard edition**, **northamerica-northeast2 (Toronto)**, using
-production mode. Do not enable open/test-mode access. Then deploy:
+Live setup completed on 2026-09-19. The **(default)** Firestore database is in
+**Standard edition**, **northamerica-northeast2 (Toronto)**. The repository's
+security rules and listing index have been deployed. Google OAuth startup and
+the website's live listing query succeeded; unauthenticated private-document
+reads were denied. Registration and rental writes were tested in the emulators,
+not with fabricated accounts or records in the live project.
+
+To deploy subsequent configuration changes:
 
 ```sh
 firebase deploy --only auth,firestore --project blyatbike
 ```
 
 `firebase.json` contains the reviewed Google provider configuration, rules, and
-listing index. Database rules must be deployed before registrations can work.
+listing index. Keep database rules deployed alongside data-model changes.
 This repository does not configure Firebase Hosting: serving only these HTML
 files would omit the Flask route API and local Toronto graph.
 
