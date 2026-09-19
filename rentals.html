@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#F7F7F5" />
+    <meta
+      name="description"
+      content="Rent a registered bike from a neighbour in downtown Toronto. Browse bikes by location and daily price."
+    />
+    <title>Rentals · Safer Ride Toronto</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2314467D'/%3E%3Cpath d='M22 8H14a5 5 0 000 10h4a3 3 0 010 6H10' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #f7f7f5;
+        --ink: #1a1d21;
+        --muted: #6b7178;
+        --blue: #14467d;
+        --red: #c1272d;
+        --line: #e3e3df;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+      button,
+      a {
+        font: inherit;
+        -webkit-tap-highlight-color: transparent;
+      }
+      button {
+        cursor: pointer;
+      }
+      a:focus-visible,
+      button:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+      }
+
+      /* Floating toggle, same position/style as the map page */
+      .page-nav {
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+        padding: 6px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        z-index: 600;
+      }
+      .page-nav a {
+        padding: 7px 14px;
+        border-radius: 2px;
+        color: var(--muted);
+        text-decoration: none;
+        border: 1px solid transparent;
+        font-weight: 500;
+      }
+      .page-nav a.active {
+        color: var(--blue);
+        border-color: var(--line);
+        background: var(--paper);
+      }
+      .page-nav a:hover {
+        color: var(--ink);
+      }
+
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 88px 24px 64px;
+      }
+      .page-head h1 {
+        margin: 0 0 4px;
+        font-size: 24px;
+        font-weight: 600;
+      }
+      .page-head p {
+        margin: 0 0 28px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .photo {
+        position: relative;
+        aspect-ratio: 5 / 3;
+        display: grid;
+        place-items: center;
+        border-bottom: 1px solid var(--line);
+      }
+      .photo svg {
+        width: 66%;
+        height: auto;
+      }
+      .badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        padding: 3px 9px;
+        border-radius: 2px;
+        background: #fff;
+        border: 1px solid var(--line);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--blue);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .body {
+        padding: 16px 18px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+      }
+      .title {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .meta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .meta span {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .meta svg {
+        flex: none;
+        color: var(--muted);
+      }
+      .price-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+      .price {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .price small {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--muted);
+      }
+      .per-hour {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .rent {
+        margin-top: 4px;
+        padding: 10px 14px;
+        border: 1px solid var(--blue);
+        border-radius: 2px;
+        background: var(--blue);
+        color: #fff;
+        font-weight: 500;
+        text-align: center;
+      }
+      .rent:hover {
+        background: #0f3a68;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="page-nav" aria-label="Switch section">
+      <a href="/">Map</a>
+      <a href="/rentals" class="active" aria-current="page">Rentals</a>
+    </nav>
+
+    <main>
+      <div class="page-head">
+        <h1>Rent a bike near you</h1>
+        <p>Registered bikes from neighbours across downtown Toronto.</p>
+      </div>
+      <section class="grid" id="grid" aria-label="Bikes for rent"></section>
+    </main>
+
+    <script>
+      // Hard-coded sample listings for the demo. Later these come from the API.
+      const listings = [
+        {
+          title: "Trek FX 2 Hybrid",
+          shieldId: "529-TOR-4821",
+          location: "Kensington Market",
+          pricePerDay: 50,
+          pricePerHour: 9,
+          colour: "#14467d",
+        },
+        {
+          title: "Norco Scene Cruiser",
+          shieldId: "529-TOR-1173",
+          location: "Harbourfront Centre",
+          pricePerDay: 35,
+          pricePerHour: 7,
+          colour: "#c1272d",
+        },
+        {
+          title: "Giant Escape 3",
+          shieldId: "529-TOR-9042",
+          location: "The Annex · U of T",
+          pricePerDay: 45,
+          pricePerHour: 8,
+          colour: "#2f7d54",
+        },
+      ];
+
+      // A simple side-view bike illustration tinted to the listing's colour,
+      // so cards render without external photos. Swap in real <img> later.
+      const bikeSvg = (colour) => `
+        <svg viewBox="0 0 200 120" role="img" aria-label="Bike photo placeholder">
+          <g fill="none" stroke="${colour}" stroke-width="4"
+             stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="52" cy="86" r="26" />
+            <circle cx="150" cy="86" r="26" />
+            <path d="M52 86 L88 44 L128 86 Z" />
+            <path d="M88 44 L98 86" />
+            <path d="M128 86 L134 50 L150 86" />
+            <path d="M78 42 h20" />
+            <path d="M134 50 h16 M150 50 v-8" />
+          </g>
+        </svg>`;
+
+      const pin = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>`;
+
+      const tag = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M20.6 13.4 12 22 3 13V3h10l7.6 7.6a1.9 1.9 0 010 2.8Z" />
+          <circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" />
+        </svg>`;
+
+      const grid = document.getElementById("grid");
+      for (const bike of listings) {
+        const card = document.createElement("article");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="photo" style="background:${bike.colour}12">
+            <span class="badge">Available</span>
+            ${bikeSvg(bike.colour)}
+          </div>
+          <div class="body">
+            <div class="title">${bike.title}</div>
+            <div class="meta">
+              <span>${pin}${bike.location}</span>
+              <span>${tag}Shield ${bike.shieldId}</span>
+            </div>
+            <div class="price-row">
+              <div>
+                <div class="price">$${bike.pricePerDay}<small> / day</small></div>
+                <div class="per-hour">or $${bike.pricePerHour} / hour</div>
+              </div>
+            </div>
+            <button class="rent" type="button">Rent this bike</button>
+          </div>`;
+        card.querySelector(".rent").addEventListener("click", () => {
+          alert(
+            `Booking flow coming soon.\n\n${bike.title}\nShield ${bike.shieldId}\n$${bike.pricePerDay}/day`,
+          );
+        });
+        grid.append(card);
+      }
+    </script>
+  </body>
+</html>

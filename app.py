@@ -80,6 +80,10 @@ def create_app(router=None, cache_path=None):
     def index():
         return send_from_directory(ROOT, "index.html")
 
+    @app.get("/rentals")
+    def rentals():
+        return send_from_directory(ROOT, "rentals.html")
+
     @app.get("/api/health")
     def health():
         if not router:

@@ -107,6 +107,31 @@
         left: 24px;
         width: 340px;
       }
+      .page-nav {
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+        padding: 6px;
+        z-index: 600;
+      }
+      .page-nav a {
+        padding: 7px 14px;
+        border-radius: 2px;
+        color: var(--muted);
+        text-decoration: none;
+        border: 1px solid transparent;
+        font-weight: 500;
+      }
+      .page-nav a.active {
+        color: var(--blue);
+        border-color: var(--line);
+        background: var(--paper);
+      }
+      .page-nav a:hover {
+        color: var(--ink);
+      }
       .brand {
         padding: 24px 24px 21px;
         border-bottom: 1px solid var(--line);
@@ -815,6 +840,10 @@
   </head>
   <body>
     <div id="map" aria-label="Toronto cycling route map"></div>
+    <nav class="page-nav panel" aria-label="Switch section">
+      <a href="/" class="active" aria-current="page">Map</a>
+      <a href="/rentals">Rentals</a>
+    </nav>
     <main>
       <section class="panel controls" aria-label="Plan your ride">
         <header class="brand">
@@ -1099,6 +1128,13 @@
       };
       let map, collisionLayer, routeTimer;
       const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
+      function syncHour(h) {
+        state.hour = h;
+        $("hour").value = String(h);
+        $("hour-display").textContent = hourLabel(h);
+        $("hour").setAttribute("aria-valuetext", hourLabel(h));
+        $("comparison-hour").textContent = `At ${hourLabel(h)}`;
+      }
       const reducedMotion = matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
@@ -1416,12 +1452,11 @@
           }),
         );
         $("hour").addEventListener("input", (event) => {
-          state.hour = Number(event.target.value);
-          $("hour-display").textContent = hourLabel(state.hour);
-          $("hour").setAttribute("aria-valuetext", hourLabel(state.hour));
-          $("comparison-hour").textContent = `At ${hourLabel(state.hour)}`;
+          syncHour(Number(event.target.value));
           reroute();
         });
+        // Default the slider to the rider's current local hour.
+        syncHour(new Date().getHours());
         $("toggle").addEventListener("click", () => {
           const collapsed = document
             .querySelector(".controls")
