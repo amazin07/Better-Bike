@@ -113,6 +113,41 @@ available and no HERE calls are made.
   calls a day at the base intervals, so the daily cap and stretched intervals are
   what keep a month within budget.
 
+## Bike thefts and bike parking
+
+- **Bike theft layer.** The map draws purple dots for bicycle thefts reported to the
+  Toronto Police Service, with a **Bike theft** switch in the legend. Hover a dot for
+  its year and premises type. The file (`static/bike-thefts.json`, about 1,400
+  points) keeps only coordinates, year, and premises type, never the police event id.
+  It is the police "Bike Theft" category of *TPS Crime App YTD*: year to date, so
+  nearly all points are from 2026, and locations are approximate as published.
+  Counts say nothing about how likely a theft is at a given rack.
+- **Yellow path to bike parking.** Every route now shows the blue route from the
+  start to the destination, and a yellow path on the map from the destination to
+  the **nearest bike parking** (a note in the results panel gives its distance and time). The nearest spot is by riding distance along the
+  same street graph (within 1.5 km), not straight-line distance. If a spot is within
+  30 m of the destination pin, the destination counts as having parking: there is no
+  yellow path, and the card says so. Parking is chosen the same way for every riding
+  style and never changes the blue routes or their scores. Where the yellow path
+  retraces the blue route, the blue line stays on top with yellow edges.
+- **Parking data** (`static/bike-parking.json`, about 13,700 existing spots in the
+  map area) combines four City of Toronto Open Data sets: street bike rings, bike
+  racks, high-capacity outdoor parking, and indoor bike stations. Removed and
+  proposed spots are dropped. A spot is used only if a street node is within 90 m;
+  the last stretch is a straight line.
+- **Refreshing.** Run `.venv/bin/python scripts/build_bike_data.py` (needs internet)
+  to rewrite both files, then commit them. The app never downloads these itself. If
+  `static/bike-parking.json` is missing, routes simply omit the yellow path.
+- **API.** `POST /api/route` adds `parking`: `null` with no parking data; otherwise
+  `{at_destination, spot: {lat, lng, kind, capacity} | null, distance_m,
+  duration_s, geometry}`. `geometry` is `null` when the spot is at the destination
+  or none was found (`spot: null`).
+
+Sources: Toronto Police Service (Open Government Licence – Ontario) and City of
+Toronto Open Data. The City's parking datasets do not state a licence in the data
+portal, so they are credited as City of Toronto Open Data. The map's attribution line
+carries both credits.
+
 ## Basemap configuration
 
 CARTO changed its service in September 2026: **Positron now requires a basemap
@@ -343,6 +378,10 @@ score = 100 − collision penalty − traffic penalty, clamped to 0–100
 - **Coverage:** only the bounded downtown graph is supported. A route may leave
   out a better alternative outside the box. Search covers selected landmarks
   and graph intersections rather than every Toronto address.
+- **Parking and theft data:** the parking datasets lag the street and may include
+  spots that are full, private-access, or seasonal; capacity is missing for most
+  street rings. Theft points are reports, not a rate, and many share one location.
+  Neither is live. The yellow path ignores riding style, traffic, and collisions.
 - **Historical interpretation:** cyclist involvement does not mean every
   injured person in the collision was a cyclist. Counts describe reported KSI
   collision events involving cyclists, not cyclist casualties or present danger.
@@ -355,7 +394,12 @@ score = 100 − collision penalty − traffic penalty, clamped to 0–100
   [OSMnx](https://osmnx.readthedocs.io/en/stable/)
 - [Open Government Licence – Toronto](https://open.toronto.ca/open-data-license/)
 
+- [Toronto Police Service, TPS Crime App YTD (Bike Theft)](https://experience.arcgis.com/experience/19cd9accd61542ffb62be3b5f29ee778)
+  and the [City of Toronto bicycle parking datasets](https://open.toronto.ca/dataset/street-furniture-bicycle-parking/)
+
 Contains information licensed under the Open Government Licence – Toronto.
+Bike theft data contains information licensed under the Open Government
+Licence – Ontario (Toronto Police Service).
 The public collision JSON contains only published coordinates, year, and severity;
 raw person-level data and trusted local pickle caches are excluded from Git.
 Only load pickle files created locally by the build script.
@@ -373,6 +417,11 @@ traffic.py                 Opt-in HERE live-traffic cache (budget-capped, in-mem
 .env.example               Template for the git-ignored local .env
 prepare_data.py             Repeatable official-data download/cache build
 static/collisions.json     Minimal real records for the initial map
+bikedata.py                Bike theft / parking normalising and loading (no network)
+scripts/build_bike_data.py Downloads thefts and parking, writes the two files below
+static/bike-thefts.json    Bike theft points (lat, lng, year, premises; no ids)
+static/bike-parking.json   Existing bike parking spots (lat, lng, kind, capacity)
+tests/test_parking.py      Theft/parking data, nearest-parking route, no effect on blue routes
 tests/test_routing.py       Parser, model, and API regression tests
 tests/test_traffic.py       Traffic cache, HERE client, and overlay API tests (no network)
 tests/test_scoring.py       Score formula, congestion matching, and score API tests

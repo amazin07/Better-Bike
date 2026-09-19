@@ -123,6 +123,41 @@ try {
   checks.push("ETA is the largest text; score and collision count sit below it");
   await screenshot("desktop-route");
 
+  // Bike thefts are mapped, and can be hidden.
+  assert(
+    await evaluate(
+      "state.thefts.length > 500 && theftLayer.getLayers().length > 0 && document.querySelector('#theft-toggle').checked",
+    ),
+  );
+  await evaluate("$('theft-toggle').click();void 0;");
+  assert(await evaluate("theftLayer.getLayers().length === 0"));
+  await evaluate("$('theft-toggle').click();void 0;");
+  assert(await evaluate("theftLayer.getLayers().length > 0"));
+  checks.push("Bike thefts are drawn and the switch hides them");
+
+  // A destination with parking at it needs no separate path (St Lawrence Market, above).
+  assert(
+    await evaluate(
+      "!$('parking-note').hidden && $('parking-text').textContent.includes('at your destination') && state.parking.length === 1",
+    ),
+  );
+  // A destination without parking gets a yellow path to the nearest parking; the blue route is unchanged.
+  await evaluate(
+    "map.fire('click',{latlng:L.latLng(43.6647,-79.4207)}); map.fire('click',{latlng:L.latLng(43.6389,-79.3828)});void 0;",
+  );
+  await waitFor("!$('results').hidden && !$('parking-note').hidden");
+  assert(
+    await evaluate(
+      "state.routes.length === 2 && state.parking.length === 3 && $('parking-text').textContent.includes('yellow path') && state.parking[1].options.style.color === '#f2b705' && state.routes[1].options.style.color === '#14467D'",
+    ),
+  );
+  checks.push("Blue route plus yellow path to the nearest bike parking (none when parking is at the destination)");
+  await screenshot("desktop-parking-path");
+  await evaluate(
+    "map.fire('click',{latlng:L.latLng(43.6629,-79.3957)}); map.fire('click',{latlng:L.latLng(43.6487,-79.3715)});void 0;",
+  );
+  await waitFor("!$('results').hidden && state.parking.length === 1");
+
   await evaluate(`window.originalFetch=fetch;window.routeBodies=[];
     window.fetch=(url,options)=>{if(url==='/api/route')window.routeBodies.push(JSON.parse(options.body));return window.originalFetch(url,options);};
     document.querySelector('[data-level="1"]').click();`);
