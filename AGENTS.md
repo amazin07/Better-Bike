@@ -205,8 +205,10 @@ and whether HERE's terms allow the shared server cache. See the README limits.
 - Signed Checkout webhooks and Accounts v2 thin webhooks are required. Run
   `.venv/bin/python scripts/stripe-listen.py` before starting local Flask; this
   saves signing secrets to ignored `.env` without printing them.
-- `npm ci` installs the official Connect.js loader; Flask serves only that module,
-  and the actual embedded component code is always loaded from Stripe.
+- `static/stripe-connect-loader.js` is the unmodified official npm loading wrapper
+  (with its MIT license alongside), committed so Flask can serve it without
+  runtime `node_modules`. The build checks it against the locked npm package;
+  refresh it when upgrading `@stripe/connect-js`. Embedded components load from Stripe.
 - Never commit API/signing keys, account-session secrets, or onboarding URLs.
   Prefer restricted keys and a hosted secret store for deployment.
 

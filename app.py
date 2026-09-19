@@ -106,11 +106,6 @@ def create_app(router=None, cache_path=None, traffic=None):
     def index():
         return send_from_directory(ROOT, "index.html")
 
-    @app.get("/static/stripe-connect-loader.js")
-    def stripe_connect_loader():
-        # Only Stripe's npm loading wrapper is local; Connect.js comes from Stripe.
-        return send_from_directory(ROOT / "node_modules/@stripe/connect-js/dist", "pure.esm.js")
-
     def firebase_page(filename):
         response = send_from_directory(ROOT, filename)
         local_connect = " http://127.0.0.1:8080 http://127.0.0.1:9099" if os.getenv("FIREBASE_USE_EMULATORS") == "1" else ""

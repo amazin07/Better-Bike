@@ -7,6 +7,11 @@ Deployments currently use the CLI; Git push alone does not trigger a deployment.
 
 The Flask preset uses Python 3.13, `app.py`, and `vercel.json`. The build stages
 the existing static files and Stripe's npm loader into `public/static` for the CDN.
+The official Stripe npm wrapper is also committed as `static/stripe-connect-loader.js`
+so Flask's static route works when `node_modules` is excluded from the function.
+The build checks the copy against the installed package. After upgrading the lockfile,
+copy `node_modules/@stripe/connect-js/dist/pure.esm.js` to that path and retain its
+adjacent MIT license. The actual Connect.js components still load from Stripe.
 `requirements.txt` contains runtime dependencies; use `requirements-dev.txt` for
 data rebuilding and tests. No routing downloads run during requests or deployment.
 
