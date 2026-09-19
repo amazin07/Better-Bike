@@ -96,12 +96,21 @@ h1 {
 .primary:hover {
   background: #103860;
 }
-.intro button {
+.intro button,
+.intro a.primary {
   min-width: 190px;
+  flex-shrink: 0;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   padding: 14px 20px;
+}
+.intro a.primary {
+  border: 1px solid var(--blue);
+  border-radius: 2px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 .tabs {
   display: flex;
@@ -350,7 +359,8 @@ fieldset {
     padding: 36px 0;
     display: block;
   }
-  .intro button {
+  .intro button,
+  .intro a.primary {
     margin-top: 24px;
   }
   h1 {

@@ -1,5 +1,9 @@
 // Shared by the no-build browser UI and emulator integration tests.
 import { validPhoto } from "./bike-photo.js";
+
+export function isDemoRecord(record) {
+  return record.ownerUid === "bikebetter-demo-owner-v1" && record.id?.startsWith("demo-");
+}
 export const BIKE_TYPES = [
   "Hybrid",
   "Road",
@@ -272,6 +276,8 @@ export function createBikeStore({ db, auth, firestore: f }) {
         const snap = await tx.get(bikeRef(id));
         if (!snap.exists()) throw new Error("This bike is no longer listed.");
         const bike = snap.data();
+        if (isDemoRecord({ ...bike, id }))
+          throw new Error("This is a sample listing for the demo, not a bookable bike.");
         if (!bike.published || !bike.available || bike.activeRequestId)
           throw new Error("This bike is no longer available.");
         if (bike.ownerUid === u.uid)

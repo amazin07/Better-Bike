@@ -23,6 +23,7 @@ import json
 import logging
 import math
 import os
+import ssl
 import threading
 import time
 import urllib.error
@@ -31,6 +32,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+import certifi
 from pyproj import Transformer
 from shapely.geometry import LineString
 from shapely.ops import unary_union
@@ -87,6 +89,10 @@ class HereClient:
         self._api_key = api_key
         self._bbox = bbox
         self._timeout = timeout
+        # Some macOS Python installs have no usable system CA bundle. Add the
+        # packaged public roots while retaining system/custom trust settings.
+        self._ssl_context = ssl.create_default_context()
+        self._ssl_context.load_verify_locations(cafile=certifi.where())
 
     def __repr__(self):
         return f"HereClient(bbox={self._bbox!r})"
@@ -97,7 +103,8 @@ class HereClient:
         request = urllib.request.Request(f"{API_BASE}/{endpoint}?{query}",
                                          headers={"Accept-Encoding": "gzip"})
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
+            with urllib.request.urlopen(request, timeout=self._timeout,
+                                        context=self._ssl_context) as response:
                 body = response.read(MAX_RESPONSE_BYTES + 1)
                 if len(body) > MAX_RESPONSE_BYTES:
                     raise HereError(None, "response too large")

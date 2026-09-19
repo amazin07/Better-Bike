@@ -7,6 +7,7 @@ import gzip
 import io
 import json
 import logging
+import ssl
 import threading
 import urllib.error
 import urllib.request
@@ -340,7 +341,7 @@ class FakeResponse:
 def test_client_asks_for_gzip_and_decodes_it(monkeypatch):
     seen = {}
 
-    def fake_urlopen(request, timeout=None):
+    def fake_urlopen(request, timeout=None, context=None):
         seen["url"] = request.full_url
         seen["headers"] = {k.lower(): v for k, v in request.header_items()}
         return FakeResponse(gzip.compress(json.dumps({"results": []}).encode()), gzipped=True)
@@ -353,13 +354,33 @@ def test_client_asks_for_gzip_and_decodes_it(monkeypatch):
     assert seen["headers"]["accept-encoding"] == "gzip"
 
 
+def test_client_verifies_https_when_system_certificate_store_is_empty(monkeypatch):
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    assert not context.get_ca_certs()
+    monkeypatch.setattr(traffic.ssl, "create_default_context", lambda: context)
+    seen = {}
+
+    def fake_urlopen(request, timeout=None, context=None):
+        seen["context"] = context
+        return FakeResponse(b'{"results": []}')
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = HereClient("SECRET-KEY-123", "bbox:1,2,3,4")
+    assert client.fetch("flow") == {"results": []}
+    assert seen["context"] is context
+    assert context.get_ca_certs()
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname is True
+
+
 @pytest.mark.parametrize("failure", [
     lambda url: urllib.error.HTTPError(url, 403, "Forbidden", {}, io.BytesIO(b"{}")),
     lambda url: urllib.error.URLError(f"could not reach {url}"),
     lambda url: TimeoutError(f"timed out fetching {url}"),
+    lambda url: urllib.error.URLError(ssl.SSLCertVerificationError(f"untrusted certificate for {url}")),
 ])
 def test_client_errors_never_contain_the_api_key(monkeypatch, failure):
-    def fake_urlopen(request, timeout=None):
+    def fake_urlopen(request, timeout=None, context=None):
         raise failure(request.full_url)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
@@ -429,7 +450,7 @@ def test_health_reports_traffic_state_without_calling_here(tmp_path):
 
 
 def test_key_never_appears_in_responses_or_logs(monkeypatch, caplog, tmp_path):
-    def fake_urlopen(request, timeout=None):
+    def fake_urlopen(request, timeout=None, context=None):
         raise urllib.error.HTTPError(request.full_url, 500, "boom", {}, io.BytesIO(b"{}"))
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)

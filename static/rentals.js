@@ -1,4 +1,5 @@
 import { preparePhoto } from "./bike-photo.js";
+import { isDemoRecord } from "./bike-store.js";
 const $ = (id) => document.getElementById(id);
 let selectedPhoto,
   photoGeneration = 0,
@@ -140,6 +141,7 @@ function renderBikes(id, bikes, own = false) {
         : "No bikes are listed right now. Have a spare? Register it and choose to publish a rental listing.",
     );
   for (const bike of bikes) {
+    const demo = isDemoRecord(bike);
     const card = node("article", "", "card");
     card.append(
       illustration(),
@@ -151,7 +153,7 @@ function renderBikes(id, bikes, own = false) {
             : bike.published
               ? "Listed for rent"
               : "Private record"
-          : "Available to request",
+          : demo ? "Demo listing" : "Available to request",
         "badge",
       ),
       node("h3", `${bike.brand} ${bike.model}`),
@@ -219,6 +221,11 @@ function renderBikes(id, bikes, own = false) {
             }
           }),
         );
+    } else if (demo) {
+      const preview = node("button", "Sample · Not bookable");
+      preview.type = "button";
+      preview.disabled = true;
+      buttons.append(preview);
     } else if (user?.uid === bike.ownerUid)
       buttons.append(action("Your bike", () => tab("mine")));
     else

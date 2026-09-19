@@ -108,7 +108,7 @@ capped (see README). `.env.example`: template for the git-ignored local `.env`.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python prepare_data.py
 .venv/bin/python app.py
 # Open http://127.0.0.1:5001
@@ -182,6 +182,8 @@ the "Live traffic" switch, `tests/test_traffic.py`). It never feeds routing; it
 feeds the safety score only while the switch is on (`tests/test_scoring.py`).
 Protect the shared HERE quota: use `HERE_FIXTURE_DIR` for UI work,
 keep the real key on one demo instance, and never commit `.env` or HERE data.
+`HereClient` adds `certifi` roots to the default SSL context so macOS Python
+installs without system roots work; never disable certificate/hostname verification.
 Unresolved: the real Traffic free allowance (default budget 2500 is a placeholder)
 and whether HERE's terms allow the shared server cache. See the README limits.
 
@@ -207,3 +209,34 @@ and whether HERE's terms allow the shared server cache. See the README limits.
   and the actual embedded component code is always loaded from Stripe.
 - Never commit API/signing keys, account-session secrets, or onboarding URLs.
   Prefer restricted keys and a hosted secret store for deployment.
+
+## Fictional presentation data
+
+- The user authorized demo rental listings and missing-bike reports in Firestore.
+  See `docs/demo-data.md` and `scripts/seed_demo_data.py` for exact records and cleanup.
+- `bikebetter-demo-owner-v1` is a synthetic owner, not an Auth or Stripe account.
+  Demo IDs start with `demo-`; retain explicit demo labels and do not present sample
+  rewards as real offers. `isDemoRecord` in `static/bike-store.js` identifies them.
+- Sample listings are not bookable; real listings are unaffected. Keep all collision
+  statistics and the police theft-map dataset authentic.
+
+<!-- stripe-projects-cli managed:agents-md:start -->
+## Stripe Projects CLI
+
+This repository is initialized for the Stripe project "Future-Legends-UofT-2026".
+
+## Tools used
+
+- [Stripe CLI](https://docs.stripe.com/stripe-cli) with the `projects` plugin to manage third-party services, credentials, and deployments for this project. Use the stripe-projects-cli to manage deploying and access to third party services.
+<!-- stripe-projects-cli managed:agents-md:end -->
+
+## Vercel hosting
+
+- See `docs/vercel-deployment.md`. The Flask entrypoint loads a committed, minimal
+  JSON routing snapshot in Vercel; trusted pickle and raw data remain local.
+- Regenerate `routing-data/toronto.json.gz` using `scripts/export_routing_bundle.py`
+  after data rebuilds. Preserve parallel edges, geometry, and deduplicated risk.
+- Runtime dependencies are in `requirements.txt`; local data/test dependencies
+  are in `requirements-dev.txt`. Hosted secrets belong in environment variables.
+- HERE traffic requires a shared quota strategy before enabling it on Vercel.
+  Never reuse a per-instance or temporary counter as a global spending limit.

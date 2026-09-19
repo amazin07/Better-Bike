@@ -47,9 +47,13 @@ def server_app():
     else:
         if os.getenv("FIRESTORE_EMULATOR_HOST") or os.getenv("FIREBASE_AUTH_EMULATOR_HOST"):
             raise RuntimeError("Emulator hosts require FIREBASE_USE_EMULATORS=1.")
-        credential = (CredentialAdapter(CliCredentials())
-                      if os.getenv("FIREBASE_USE_CLI_CREDENTIALS") == "1"
-                      else credentials.ApplicationDefault())
+        service_account = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if service_account:
+            credential = credentials.Certificate(json.loads(service_account))
+        else:
+            credential = (CredentialAdapter(CliCredentials())
+                          if os.getenv("FIREBASE_USE_CLI_CREDENTIALS") == "1"
+                          else credentials.ApplicationDefault())
     return firebase_admin.initialize_app(credential, {
         "projectId": "demo-bikebetter" if local else "blyatbike",
     }, name="rental-payments")

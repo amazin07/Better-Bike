@@ -15,7 +15,7 @@ Python 3.11 or newer is recommended. The frontend is one `index.html`: Leaflet
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python prepare_data.py
 .venv/bin/python app.py
 ```
@@ -70,7 +70,9 @@ cp .env.example .env      # then set HERE_API_KEY; .env is git-ignored
 | `HERE_FIXTURE_DIR` | none | Serve saved `here_flow.json` and `here_incidents.json` instead of calling HERE. Costs no budget; for UI work. Overrides the key. |
 
 Without a key or fixture directory the switch reports that live traffic is not
-available and no HERE calls are made.
+available and no HERE calls are made. HERE HTTPS requests supplement Python’s
+system certificate store with the `certifi` CA bundle, including on macOS installs
+with missing system roots. Certificate and hostname verification remain enabled.
 
 ### How it protects the HERE quota
 
@@ -472,3 +474,10 @@ For the browser smoke check, start Flask, start Chrome with
 cards and scores, riding styles, stale responses, routing failure, and mobile
 controls. Screenshots go
 to the ignored `artifacts/` directory.
+
+For the presentation, [labelled demo listings and missing-bike reports](docs/demo-data.md)
+are available. The guide includes repeatable seeding and precise cleanup commands;
+these records do not represent real rentals, thefts, or payable rewards.
+
+For hosted deployment, see [Vercel setup](docs/vercel-deployment.md). The committed
+JSON routing snapshot lets the hosted site calculate routes without a local pickle.

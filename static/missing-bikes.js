@@ -1,3 +1,4 @@
+import { isDemoRecord } from "./bike-store.js";
 const $ = (id) => document.getElementById(id);
 let client,
   user,
@@ -59,6 +60,7 @@ function render() {
     (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0),
   );
   for (const report of sorted) {
+    const demo = isDemoRecord(report);
     const card = node("article", "", "card");
     if (report.photoDataUrl) {
       const img = node("img", "", "bike-photo");
@@ -70,7 +72,7 @@ function render() {
       card.append(illustration());
     }
     card.append(
-      node("span", "Reported missing", "badge missing"),
+      node("span", demo ? "Demo report · Fictional" : "Reported missing", "badge missing"),
       node("h3", report.title),
       node(
         "p",
@@ -83,9 +85,9 @@ function render() {
       card.append(node("p", report.description, "description"));
     if (report.rewardCents > 0)
       card.append(
-        node("p", `Reward: ${money(report.rewardCents)} for its safe return`, "rates reward"),
+        node("p", demo ? `Example reward: ${money(report.rewardCents)}` : `Reward: ${money(report.rewardCents)} for its safe return`, "rates reward"),
       );
-    card.append(node("p", `Tips: ${report.contactEmail}`, "meta"));
+    card.append(node("p", demo ? "Sample report · No contact or reward payment" : `Tips: ${report.contactEmail}`, "meta"));
 
     const buttons = node("div", "", "actions");
     if (user && report.ownerUid === user.uid) {

@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from bikedata import load_parking
+from graph_bundle import load_bundle
 from routing import Collision, RouteError, Router
 from scoring import safety_score
 from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
@@ -67,9 +68,14 @@ def create_app(router=None, cache_path=None, traffic=None):
             request.max_content_length = 262144
     if router is None:
         path = Path(cache_path) if cache_path is not None else ROOT / "data/processed/toronto.pkl"
+        if cache_path is None and (os.getenv("VERCEL") or not path.exists()):
+            path = ROOT / "routing-data/toronto.json.gz"
         try:
-            with path.open("rb") as source:
-                bundle = pickle.load(source)
+            if path.name.endswith(".json.gz"):
+                bundle = load_bundle(path)
+            else:
+                with path.open("rb") as source:
+                    bundle = pickle.load(source)
             router = Router(bundle["graph"], [Collision(**row) for row in bundle["records"]], bundle["metadata"],
                             parking=load_parking(ROOT / "static/bike-parking.json"))
         except (OSError, ValueError, KeyError, pickle.UnpicklingError, EOFError):
@@ -195,3 +201,5 @@ def create_app(router=None, cache_path=None, traffic=None):
 if __name__ == "__main__":
     load_env_file(ROOT / ".env")  # only the dev server reads .env; deployments set real variables
     create_app().run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5001)), debug=False)
+elif os.getenv("VERCEL"):
+    app = create_app()
