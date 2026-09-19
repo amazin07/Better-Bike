@@ -11,8 +11,10 @@ with a route weighted by recorded cyclist collision history, rider confidence,
 and departure hour. The user explicitly confirmed the browser website format.
 
 Ship Toronto end to end first. Rentals/Stripe and New York are optional and are
-not part of the current implementation. No accounts, database, live traffic,
-turn-by-turn navigation, or real payments. Never fabricate collision statistics.
+not part of the current implementation. No accounts, database, turn-by-turn
+navigation, or real payments. Live HERE traffic exists only as a display-only,
+opt-in map overlay (`traffic.py`, see README); it never feeds routing.
+Never fabricate collision statistics.
 
 ## Decisions and data pitfalls
 
@@ -58,6 +60,8 @@ turn-by-turn navigation, or real payments. Never fabricate collision statistics.
 
 `prepare_data.py`: download, clean, cache graph, match infrastructure, attach risk.
 `routing.py`: parsing and routing model. `app.py`: Flask API and website.
+`traffic.py`: opt-in HERE live-traffic overlay cache; memory-only and call-budget
+capped (see README). `.env.example`: template for the git-ignored local `.env`.
 `index.html`: single-file, no-build Leaflet frontend. `tests/`: model/API tests.
 `data/`: ignored source/cache artifacts. `static/`: shareable map data artifacts.
 
@@ -92,3 +96,10 @@ The verified local build has 12,294 nodes, 29,231 edges, and 442 cyclist KSI
 collisions in coverage (370 within 30 metres of nodes). Sources span 2006–2026.
 See README for setup and model limitations; the public map JSON is committed,
 but each teammate must run `prepare_data.py` for their local graph cache.
+
+The opt-in live HERE traffic overlay is implemented (`traffic.py`, `/api/traffic`,
+the "Live traffic" switch, `tests/test_traffic.py`). It is display-only and never
+feeds routing. Protect the shared HERE quota: use `HERE_FIXTURE_DIR` for UI work,
+keep the real key on one demo instance, and never commit `.env` or HERE data.
+Unresolved: the real Traffic free allowance (default budget 2500 is a placeholder)
+and whether HERE's terms allow the shared server cache. See the README limits.

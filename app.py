@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from routing import Collision, RouteError, Router
+from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
 
 ROOT = Path(__file__).resolve().parent
 LANDMARKS = [
@@ -48,7 +49,7 @@ def validate_payload(payload):
     return payload
 
 
-def create_app(router=None, cache_path=None):
+def create_app(router=None, cache_path=None, traffic=None):
     app = Flask(__name__, static_folder=str(ROOT / "static"))
     app.config["MAX_CONTENT_LENGTH"] = 8192
     if router is None:
@@ -59,6 +60,11 @@ def create_app(router=None, cache_path=None):
             router = Router(bundle["graph"], [Collision(**row) for row in bundle["records"]], bundle["metadata"])
         except (OSError, ValueError, KeyError, pickle.UnpicklingError, EOFError):
             logging.exception("Routing cache unavailable. Run prepare_data.py, then restart Flask.")
+
+    if traffic is None:
+        # Live traffic is an opt-in overlay. Unconfigured, it is off and makes no HERE calls.
+        bounds = (getattr(router, "metadata", None) or {}).get("bounds") or DEFAULT_BOUNDS
+        traffic = TrafficCache.from_env(bounds, usage_path=ROOT / "data/here_usage.json")
 
     places = [{"label": name, "coordinate": [lat, lng]} for name, lat, lng in LANDMARKS]
     if router:
@@ -88,9 +94,10 @@ def create_app(router=None, cache_path=None):
     def health():
         if not router:
             return jsonify(status="unavailable", graph_nodes=0, collision_records=0,
-                           error="Run prepare_data.py, then restart the server."), 503
+                           error="Run prepare_data.py, then restart the server.",
+                           traffic=traffic.status()), 503
         return jsonify(**{**router.metadata, "status": "ok", "graph_nodes": len(router.graph),
-                          "collision_records": len(router.records)})
+                          "collision_records": len(router.records), "traffic": traffic.status()})
 
     @app.get("/api/config")
     def config():
@@ -117,6 +124,19 @@ def create_app(router=None, cache_path=None):
         except RouteError as error:
             return jsonify(error=str(error)), 422
 
+    @app.get("/api/traffic")
+    def traffic_overlay():
+        # The only place HERE data leaves the server. May trigger a budget-capped refresh.
+        body = traffic.snapshot()
+        etag = body.pop("etag")
+        response = jsonify(body)
+        if body["flow"] is None:
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        response.set_etag(etag, weak=True)
+        response.headers["Cache-Control"] = "no-cache"  # always revalidate; a 304 costs no HERE call
+        return response.make_conditional(request)
+
     @app.errorhandler(413)
     def too_large(error):
         return jsonify(error="The request is too large."), 413
@@ -125,4 +145,5 @@ def create_app(router=None, cache_path=None):
 
 
 if __name__ == "__main__":
+    load_env_file(ROOT / ".env")  # only the dev server reads .env; deployments set real variables
     create_app().run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5001)), debug=False)

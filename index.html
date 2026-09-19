@@ -321,6 +321,125 @@
         color: var(--muted);
         margin: 3px 0 0;
       }
+      .switch {
+        appearance: none;
+        -webkit-appearance: none;
+        flex: none;
+        width: 38px;
+        height: 22px;
+        margin: 0;
+        border: 0;
+        border-radius: 11px;
+        background: #c9cdd1;
+        position: relative;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        transition: transform 0.15s;
+      }
+      .switch:checked {
+        background: var(--blue);
+      }
+      .switch:checked::after {
+        transform: translateX(16px);
+      }
+      .switch:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+      .switch:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .traffic-status.is-warn {
+        color: #9a5b00;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .switch,
+        .switch::after {
+          transition: none;
+        }
+      }
+      /* Hangs off the right edge of the left panel. It is absolutely positioned,
+         so it adds no height to that panel and the legend cannot cover it. On
+         phones it drops into the panel's normal flow (see the max-width: 760px
+         rules). */
+      .traffic-control {
+        top: 0;
+        left: calc(100% + 16px);
+        width: max-content;
+        max-width: 300px;
+        padding: 10px 14px 11px;
+      }
+      .traffic-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .traffic-row label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .traffic-status {
+        margin: 4px 0 0;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .traffic-key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .traffic-key[hidden] {
+        display: none;
+      }
+      /* Same condition that auto-collapses the panel: keep it short so it
+         never reaches the zoom buttons. The phone legend is hidden too. */
+      @media (max-width: 760px) and (max-height: 739px) {
+        .traffic-key {
+          display: none;
+        }
+      }
+      .legend-jam {
+        display: flex;
+        gap: 2px;
+      }
+      .legend-jam i {
+        width: 9px;
+        border-top: 3px solid var(--c);
+      }
+      .legend-closed {
+        width: 23px;
+        border-top: 3px dotted var(--ink);
+      }
+      .legend-incident {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #8a9299;
+        border: 1.5px solid white;
+        box-shadow: 0 0 0 1px #8a9299;
+      }
+      .traffic-popup div {
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--muted);
+      }
       .slider-wrap {
         margin-top: 20px;
       }
@@ -628,6 +747,10 @@
         .legend {
           gap: 12px;
         }
+        .traffic-control {
+          min-width: 150px;
+          max-width: calc(100vw - 645px);
+        }
       }
       @media (max-width: 760px) {
         .controls {
@@ -785,6 +908,16 @@
         }
         .legend {
           display: none;
+        }
+        .traffic-control {
+          position: static;
+          width: auto;
+          min-width: 0;
+          max-width: none;
+          border: 0;
+          border-top: 1px solid var(--line);
+          border-radius: 0;
+          padding: 12px 22px;
         }
         .leaflet-control-zoom {
           margin-right: 14px !important;
@@ -993,6 +1126,35 @@
             </div>
           </section>
         </div>
+        <div class="panel traffic-control" role="group" aria-label="Live traffic">
+          <div class="traffic-row">
+            <label for="traffic-toggle">Live traffic</label>
+            <input
+              type="checkbox"
+              class="switch"
+              id="traffic-toggle"
+              role="switch"
+              aria-describedby="traffic-status"
+            />
+          </div>
+          <p class="traffic-status" id="traffic-status" role="status">
+            Off · shows congestion and closures now
+          </p>
+          <div class="traffic-key traffic-legend" hidden>
+            <span class="legend-item"
+              ><span class="legend-jam"
+                ><i style="--c: #d9a400"></i><i style="--c: #e8590c"></i
+                ><i style="--c: #a4161a"></i></span
+              >Slow to jammed</span
+            >
+            <span class="legend-item"
+              ><span class="legend-closed"></span>Closed</span
+            >
+            <span class="legend-item"
+              ><span class="legend-incident"></span>Incident</span
+            >
+          </div>
+        </div>
         <footer class="controls-footer">
           <span
             ><span class="status-dot"></span
@@ -1127,6 +1289,7 @@
         controller: null,
       };
       let map, collisionLayer, routeTimer;
+      let trafficLayer, incidentLayer, trafficRenderer;
       const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
       function syncHour(h) {
         state.hour = h;
@@ -1362,6 +1525,202 @@
           routeTimer = setTimeout(() => getRoute(), 140);
         }
       }
+      // Live traffic overlay. The browser only talks to /api/traffic; the server
+      // owns the HERE key, cache, and call budget. Polling here just revalidates
+      // (usually a 304) and never causes a HERE call by itself.
+      const TRAFFIC_POLL_MS = 60000;
+      const traffic = {
+        on: false,
+        busy: false,
+        fetchedAt: null,
+        message: "",
+        poll: null,
+        label: null,
+        retry: null,
+      };
+      const INCIDENT_LABELS = {
+        accident: "Collision",
+        construction: "Road construction",
+        congestion: "Congestion",
+        disabledVehicle: "Disabled vehicle",
+        massTransit: "Transit event",
+        plannedEvent: "Planned event",
+        roadHazard: "Road hazard",
+        roadClosure: "Road closure",
+        weather: "Weather",
+        laneRestriction: "Lane restriction",
+        other: "Road incident",
+      };
+
+      function jamColor(p) {
+        if (p.closed) return "#1a1d21";
+        return p.jf >= 7 ? "#a4161a" : p.jf >= 4 ? "#e8590c" : "#d9a400";
+      }
+
+      function incidentStyle(p) {
+        if (p.closed) return { radius: 7, fill: "#1a1d21" };
+        if (p.crit === "critical" || p.crit === "major")
+          return { radius: 6, fill: "#e8590c" };
+        return { radius: 4, fill: "#8a9299" };
+      }
+
+      // Incident text comes from a third party: build it with textContent only.
+      function incidentPopup(p) {
+        const box = document.createElement("div");
+        box.className = "traffic-popup";
+        const title = document.createElement("strong");
+        title.textContent = INCIDENT_LABELS[p.type] || "Road incident";
+        box.append(title);
+        const until = p.end ? new Date(p.end) : null;
+        const lines = [
+          p.summary,
+          p.detail,
+          until && !isNaN(until)
+            ? `Until ${until.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}`
+            : "",
+        ];
+        for (const text of lines) {
+          if (!text) continue;
+          const line = document.createElement("div");
+          line.textContent = text;
+          box.append(line);
+        }
+        return box;
+      }
+
+      function setTrafficStatus(text, warn = false, hint = "") {
+        const el = $("traffic-status");
+        el.textContent = text;
+        el.title = hint;
+        el.classList.toggle("is-warn", warn);
+      }
+
+      function trafficAge() {
+        const minutes = Math.max(
+          0,
+          Math.floor((Date.now() - traffic.fetchedAt) / 60000),
+        );
+        return minutes < 1 ? "just now" : `${minutes} min ago`;
+      }
+
+      function updateTrafficLabel() {
+        if (!traffic.on || traffic.fetchedAt === null) return;
+        if (traffic.message) setTrafficStatus(traffic.message, true);
+        else setTrafficStatus(`Live · updated ${trafficAge()}`);
+      }
+
+      function clearTraffic() {
+        trafficLayer.clearLayers();
+        incidentLayer.clearLayers();
+        traffic.fetchedAt = null;
+      }
+
+      function renderTraffic(data) {
+        clearTraffic();
+        if (data.flow)
+          L.geoJSON(data.flow, {
+            pane: "traffic",
+            renderer: trafficRenderer,
+            interactive: false,
+            style: ({ properties: p }) => ({
+              color: jamColor(p),
+              weight: p.closed ? 4 : 3,
+              opacity: 0.85,
+              dashArray: p.closed ? "1 7" : null,
+              lineCap: "round",
+            }),
+          }).addTo(trafficLayer);
+        if (data.incidents)
+          L.geoJSON(data.incidents, {
+            pointToLayer: (feature, latlng) => {
+              const s = incidentStyle(feature.properties);
+              return L.circleMarker(latlng, {
+                pane: "incidents",
+                radius: s.radius,
+                color: "#fff",
+                weight: 1.5,
+                fillColor: s.fill,
+                fillOpacity: 0.95,
+              });
+            },
+            onEachFeature: (feature, layer) =>
+              layer.bindPopup(incidentPopup(feature.properties)),
+          }).addTo(incidentLayer);
+      }
+
+      async function loadTraffic() {
+        if (!traffic.on || traffic.busy || document.hidden) return;
+        traffic.busy = true;
+        clearTimeout(traffic.retry);
+        try {
+          const response = await fetch("/api/traffic");
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          if (!traffic.on) return;
+          if (data.flow) {
+            renderTraffic(data);
+            traffic.fetchedAt = Date.parse(data.meta.flow_fetched_at);
+            traffic.message = data.meta.message || "";
+            updateTrafficLabel();
+          } else if (data.status === "loading") {
+            setTrafficStatus("Loading traffic…");
+            traffic.retry = setTimeout(loadTraffic, 4000);
+          } else {
+            clearTraffic();
+            const off = data.status === "disabled";
+            setTrafficStatus(
+              off
+                ? "Live traffic isn't available on this server."
+                : data.meta.message || "Traffic is unavailable right now.",
+              true,
+              data.meta.message || "",
+            );
+            if (off) disableTraffic();
+          }
+        } catch {
+          if (traffic.on)
+            setTrafficStatus("Traffic is unavailable right now.", true);
+        } finally {
+          traffic.busy = false;
+        }
+      }
+
+      function stopTraffic() {
+        traffic.on = false;
+        clearInterval(traffic.poll);
+        clearInterval(traffic.label);
+        clearTimeout(traffic.retry);
+        clearTraffic();
+        map.attributionControl.removeAttribution("Traffic data © HERE");
+        document
+          .querySelectorAll(".traffic-legend")
+          .forEach((el) => (el.hidden = true));
+      }
+
+      function disableTraffic() {
+        const toggle = $("traffic-toggle");
+        toggle.checked = false;
+        toggle.disabled = true;
+        stopTraffic();
+      }
+
+      function onTrafficToggle(event) {
+        if (!event.target.checked) {
+          stopTraffic();
+          setTrafficStatus("Off · shows congestion and closures now");
+          return;
+        }
+        traffic.on = true;
+        map.attributionControl.addAttribution("Traffic data © HERE");
+        document
+          .querySelectorAll(".traffic-legend")
+          .forEach((el) => (el.hidden = false));
+        setTrafficStatus("Loading traffic…");
+        loadTraffic();
+        traffic.poll = setInterval(loadTraffic, TRAFFIC_POLL_MS);
+        traffic.label = setInterval(updateTrafficLabel, 15000);
+      }
+
       async function init() {
         if (!window.L) {
           show(
@@ -1408,12 +1767,17 @@
           })
           .addTo(map);
         for (const [name, zIndex] of [
+          ["traffic", 405],
           ["collisions", 410],
           ["direct", 420],
           ["safer", 430],
+          ["incidents", 440],
         ])
           map.createPane(name).style.zIndex = zIndex;
         collisionLayer = L.layerGroup().addTo(map);
+        trafficLayer = L.layerGroup().addTo(map);
+        incidentLayer = L.layerGroup().addTo(map);
+        trafficRenderer = L.canvas({ pane: "traffic" });
         map.on("moveend", renderCollisions);
         map.on("click", (event) => {
           document
@@ -1426,6 +1790,10 @@
           ]);
         });
         $("reset").addEventListener("click", reset);
+        $("traffic-toggle").addEventListener("change", onTrafficToggle);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) loadTraffic();
+        });
         $("example").addEventListener("click", () => {
           reset();
           setPoint(

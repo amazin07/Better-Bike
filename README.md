@@ -47,6 +47,68 @@ Flask. A public host must install requirements, run the data build, retain the
 generated `data/processed/toronto.pkl`, and serve `app:create_app()` with a WSGI
 server. Do not use Flask's development server for a public deployment.
 
+## Live traffic overlay (optional, HERE)
+
+A **Live traffic** switch on the map draws HERE's current congestion, road
+closures, and incidents over the downtown map. It is display-only: routes, route
+costs, and the collision model never use it, and route requests still make no
+external calls. The overlay is **off until someone turns the switch on**.
+
+```sh
+cp .env.example .env      # then set HERE_API_KEY; .env is git-ignored
+.venv/bin/python app.py   # the dev server loads .env; deployments set real variables
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HERE_API_KEY` | none | Server-side HERE key. Never sent to the browser or logged. |
+| `HERE_MONTHLY_BUDGET` | 2500 | Hard cap on HERE calls per month. **Placeholder:** set it to your real free allowance (HERE platform → profile icon → Billing & Usage). |
+| `HERE_FIXTURE_DIR` | none | Serve saved `here_flow.json` and `here_incidents.json` instead of calling HERE. Costs no budget; for UI work. Overrides the key. |
+
+Without a key or fixture directory the switch reports that live traffic is not
+available and no HERE calls are made.
+
+### How it protects the HERE quota
+
+- The browser only calls `GET /api/traffic`. Flask keeps **one in-memory snapshot
+  for every viewer**, and browser polling revalidates with an `ETag` (usually a
+  `304`), so viewers do not multiply HERE calls.
+- Feeds refresh **only when someone is viewing the overlay**: flow every 5 minutes
+  and incidents every 10. The intervals double once 50% of the month's budget is
+  used and quadruple at 80%. A daily cap (15% of the monthly budget) stops a
+  runaway day. Only one refresh runs at a time.
+- The counter lives in `data/here_usage.json` (a counter only, never HERE data).
+  If that file is unreadable the cache **fails closed** and makes no calls. Failed
+  attempts count against the budget, back off, and after 3 consecutive errors
+  pause refreshing for 15 minutes. A rejected key (401/403) turns it off until the
+  server restarts. When the budget is spent the last snapshot stays visible,
+  marked stale.
+- HERE data is held **in memory only**: no archive and no copy on disk.
+- Use the real key on one demo instance. Teammates should set `HERE_FIXTURE_DIR`
+  so UI work costs nothing. Fixture files are HERE data: keep them in the ignored
+  `data/` folder and never commit them.
+
+### Limits to keep in mind
+
+- HERE's flow comes from connected-car probes: it describes **car traffic**, not
+  cyclists. `jamFactor` measures congestion, not danger, and no HERE incident type
+  identifies cyclist crashes. Only flow with `jamFactor` ≥ 2, or closed, is drawn
+  (`MIN_JAM_FACTOR` in `traffic.py`).
+- HERE's developer terms are reported to restrict caching results and serving one
+  response to many users. We have **not verified which terms apply to this
+  account**; confirm them before any public launch.
+- The overlay shows "Traffic data © HERE" while on. Confirm HERE's exact
+  attribution requirements before launch.
+- The 2,500 default is a placeholder; the real Traffic allowance is unconfirmed.
+- Coverage is the same downtown bounding box as the routing graph.
+- **Run one server process.** The cache and its call counter live in one process's
+  memory (threads are fine). Several worker processes would each keep their own
+  snapshot and count, multiplying HERE calls and undercounting the budget.
+- The monthly and daily counters roll over on UTC dates, which may not match HERE's
+  billing cycle. Leaving the overlay on around the clock would use roughly 430
+  calls a day at the base intervals, so the daily cap and stretched intervals are
+  what keep a month within budget.
+
 ## Basemap configuration
 
 CARTO changed its service in September 2026: **Positron now requires a basemap
@@ -82,6 +144,9 @@ Source years are 2006–2026, with the latest source collision dated August 29,
 - `GET /api/places?q=...`: local landmark/intersection search; not arbitrary
   address geocoding and no third-party geocoder.
 - `GET /api/config`: browser basemap configuration.
+- `GET /api/traffic`: opt-in live HERE overlay (compact flow and incident GeoJSON
+  plus status and call budget), served from the server's cache and `ETag`
+  revalidated. `/api/health` also reports a `traffic` block without calling HERE.
 - `GET /static/collisions.json`: minimal published collision points. These load
   independently of the routing endpoint and remain visible if routing fails.
 
@@ -232,9 +297,12 @@ docs/safer-ride-spec.md      Original supplied specification
 index.html                 Responsive, no-build website
 app.py                     Flask website, validation, and API
 routing.py                 CSV parser, node risk, route calculations
+traffic.py                 Opt-in HERE live-traffic cache (budget-capped, in-memory)
+.env.example               Template for the git-ignored local .env
 prepare_data.py             Repeatable official-data download/cache build
 static/collisions.json     Minimal real records for the initial map
 tests/test_routing.py       Parser, model, and API regression tests
+tests/test_traffic.py       Traffic cache, HERE client, and overlay API tests (no network)
 scripts/browser_smoke.mjs   Desktop/mobile interaction and failure checks
 scripts/evaluate_routing.py Original/current real-route comparison
 docs/routing-evaluation.json Recorded comparison with source provenance
