@@ -38,9 +38,16 @@ turn-by-turn navigation, or real payments. Never fabricate collision statistics.
 - Preserve actual OSM edge geometry and direction, including parallel edges.
 - Do not promise the weighted route always reduces raw counts; show actual
   differences honestly, including ties, increases, and zero baselines.
-- The exact supplied lane discounts can dominate the injury signal on real
-  Toronto routes. Preserve honest output and consult the README model notes
-  before changing this weighting.
+- The user authorized tuning while keeping bike lanes strongly prioritized.
+  Keep the 0.55 protected / 0.80 painted lane distance multipliers. The revised
+  cost is `length * lane_multiplier + alpha * 600m * normalized_node_risk`.
+  Do not apply lane discounts or approach-edge length to the collision penalty.
+  Normalize against a single maximum across all graph nodes and 24 hours, so a
+  time boost cannot cancel itself through per-hour normalization. The direct
+  baseline remains pure distance. This decision supersedes the original spec.
+- `scripts/evaluate_routing.py` compares the original and current heuristics on
+  all 132 directed landmark pairs; `docs/routing-evaluation.json` records the
+  current snapshot. This checks behavior, not predicted real-world safety.
 - CARTO now requires a basemap API key. `CARTO_BASEMAP_KEY` enables Positron;
   without it the website uses a muted OpenStreetMap fallback. Never commit keys.
 - Keep README limitations visible to developers. Current City guidance says

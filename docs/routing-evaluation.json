@@ -1,0 +1,132 @@
+{
+  "model": "lane-priority-node-penalty-v2",
+  "risk_penalty_m": 600.0,
+  "data_build": {
+    "built_at": "2026-09-19T15:24:50.900524+00:00",
+    "city": "toronto",
+    "graph_nodes": 12294,
+    "graph_edges": 29231,
+    "collision_records": 442,
+    "matched_collision_records": 370,
+    "years": [
+      2006,
+      2026
+    ],
+    "bounds": [
+      [
+        43.6274748,
+        -79.4454156
+      ],
+      [
+        43.6988688,
+        -79.3459756
+      ]
+    ],
+    "source_counts": {
+      "person_rows": 20723,
+      "unique_collisions": 7598,
+      "cyclist_collisions": 923,
+      "invalid_cyclist_records": 0
+    },
+    "infrastructure_edges": {
+      "1.0": 26540,
+      "0.55": 2090,
+      "0.8": 601
+    },
+    "sources": {
+      "ksi": {
+        "catalogue": "https://open.toronto.ca/dataset/motor-vehicle-collisions-involving-killed-or-seriously-injured-persons/",
+        "sha256": "d319d43f2eb333cc0638473bb4c496b6e15f8fdc878318dcd779d7201a76b3bc"
+      },
+      "cycling": {
+        "catalogue": "https://open.toronto.ca/dataset/cycling-network/",
+        "sha256": "c5d53a5fd367d39da5cdd58f97b8f95d4d94fcbc760ab15d55620c34dfc6fec1"
+      }
+    }
+  },
+  "route_pairs": 132,
+  "settings": {
+    "level": 2,
+    "hour": 8,
+    "comparison_hour": 22
+  },
+  "notes": "Descriptive heuristic comparison on landmark trips, not safety validation. Collision counts repeat across different trips. Lane share is an unweighted mean of route shares.",
+  "direct": {
+    "sum_route_collision_counts": 1022,
+    "mean_lane_share": 0.2866
+  },
+  "models": {
+    "original": {
+      "sum_route_collision_counts": 1278,
+      "fewer_than_direct": 14,
+      "same_as_direct": 48,
+      "more_than_direct": 70,
+      "mean_lane_share": 0.5548,
+      "median_distance_ratio_to_direct": 1.0157,
+      "maximum_distance_ratio_to_direct": 1.3842,
+      "routes_changed_8am_to_10pm": 22,
+      "routes_changed_novice_to_confident": 35
+    },
+    "current": {
+      "sum_route_collision_counts": 855,
+      "fewer_than_direct": 59,
+      "same_as_direct": 46,
+      "more_than_direct": 27,
+      "mean_lane_share": 0.467,
+      "median_distance_ratio_to_direct": 1.0127,
+      "maximum_distance_ratio_to_direct": 1.3241,
+      "routes_changed_8am_to_10pm": 29,
+      "routes_changed_novice_to_confident": 98
+    }
+  },
+  "examples": [
+    {
+      "origin": "Kensington Market",
+      "destination": "Christie Pits Park",
+      "direct": {
+        "ksi_total": 8,
+        "distance_m": 2438.79729220831,
+        "lane_share": 0.38625277455532464
+      },
+      "original": {
+        "ksi_total": 4,
+        "distance_m": 2449.030024587092,
+        "lane_share": 0.38270912395790224
+      },
+      "current_8am": {
+        "ksi_total": 1,
+        "distance_m": 2445.5054961247088,
+        "lane_share": 0.3224830342653268
+      },
+      "current_10pm": {
+        "ksi_total": 1,
+        "distance_m": 2445.5054961247088,
+        "lane_share": 0.3224830342653268
+      }
+    },
+    {
+      "origin": "University of Toronto \u00b7 King's College Circle",
+      "destination": "St. Lawrence Market",
+      "direct": {
+        "ksi_total": 4,
+        "distance_m": 3472.143103594961,
+        "lane_share": 0.1927098277751424
+      },
+      "original": {
+        "ksi_total": 11,
+        "distance_m": 4147.72496092648,
+        "lane_share": 0.8028019142116385
+      },
+      "current_8am": {
+        "ksi_total": 5,
+        "distance_m": 3500.9917147222604,
+        "lane_share": 0.46570225428548256
+      },
+      "current_10pm": {
+        "ksi_total": 7,
+        "distance_m": 3548.002499913353,
+        "lane_share": 0.4776247334393006
+      }
+    }
+  ]
+}

@@ -37,7 +37,7 @@ graph. Route requests and place searches make **no external API calls**.
 
 `requirements-lock.txt` records the exact Python versions used for verification;
 install that file instead of `requirements.txt` for a pinned environment.
-The verified build passes 26 parser/model/API tests and the desktop/mobile browser
+The verified build passes 32 parser/model/API tests and the desktop/mobile browser
 smoke checks described below.
 
 Restart Flask after rebuilding data. Use `HOST=0.0.0.0 PORT=5001` before the run
@@ -109,28 +109,76 @@ Each deduplicated record contributes to nodes within 30 metres, using metric
 coordinates (UTM zone 17N). Unmatched records remain visible on the map but do
 not affect route costs. Fatal severity has weight 3, other records weight 1.
 Records within two hours of departure get double weight, wrapping around
-midnight. Missing times get no boost. Risk is divided by the maximum node risk
-at that hour, with zero used for a graph without collisions.
+midnight. Missing times get no boost. Risk is divided by a **single maximum
+across all graph nodes and all 24 hours**, with zero risk used for a graph without
+collisions. Using a common scale preserves the hour boost even if a graph has
+only one node with recorded collisions.
 
-The direct route minimizes distance only. The weighted route uses the spec's
-`length × lane_multiplier × (1 + alpha × normalized_node_risk)`; alpha is 0.9,
-0.5, or 0.2 by rider level. Toronto cycling-network geometries supply 0.55 for
+The direct route minimizes distance only. With the user's approval, the revised
+weighted route keeps strong bike-lane preference and uses:
+
+```text
+cost = length_m × lane_multiplier + alpha × 600 m × normalized_node_risk
+```
+
+Alpha is 0.9, 0.5, or 0.2 by rider level. The 600 m constant is a heuristic distance
+tradeoff, not a predicted injury rate: at maximum normalized risk, the extra
+cost is 540, 300, or 120 lane-weighted metres respectively. This additive
+intersection penalty is independent of approach length and is **not discounted
+by a bike lane**. A short approach cannot make an intersection's history nearly
+disappear. Lane distance remains discounted even when there is no collision
+history, so longer protected/painted alternatives can still beat shorter streets.
+
+Toronto cycling-network geometries supply 0.55 for
 separated tracks/trails, 0.8 for painted/buffered lanes, and 1 otherwise. Matching
 requires at least 65% of the street edge to lie within 12 m of an infrastructure
 line, so a simple perpendicular crossing is not enough. The less favorable of
 the source's two directional classifications is used conservatively.
 
-**The original weights can favor bike lanes over lower collision counts.** The
-weighted route can have more recorded collisions or remain identical across
-hours/levels; the app displays those outcomes honestly. U of T → St. Lawrence
-Market is one such case in the current snapshot. This is a model limitation,
-not a predicted reduction in injury probability. No universal reduction is
-claimed, and controls never generate artificial changes for demonstration.
+**Lane preference can still outweigh raw collision counts.** The weighted route
+can have more recorded collisions or remain identical across hours/levels; the
+app displays those outcomes honestly. U of T → St. Lawrence Market is one such
+case in the current snapshot. No universal reduction is claimed, and controls
+never generate artificial changes for demonstration.
 
-For a demonstration of a real time-dependent change, search **Kensington Market
-→ Christie Pits Park** and compare 8am with 10pm. In this snapshot, the 8am
-comfortable route has four recorded collisions versus eight on the direct route.
-Results are calculated from the cache and may change after a data refresh.
+The included example, **Kensington Market → Christie Pits Park**, has one recorded
+collision on the comfortable route versus eight on the direct route at 8am in
+this snapshot. For a real time-dependent path change, search **U of T →
+St. Lawrence Market** and compare 8am with 10pm (five vs seven recorded collisions
+on the suggested paths; four on the direct route). These are all-time route
+counts, not counts of events occurring at those departure times. Results may
+change after a data refresh.
+
+### Weighting comparison
+
+The 600 m penalty was chosen after comparing 300, 600, 900, 1200, and 1800 m:
+higher penalties reduced historical counts further but sacrificed progressively
+more mapped bike-lane use. The selected value keeps substantial lane preference
+while making collision history and rider choice more influential.
+
+On all 132 directed pairs of the 12 built-in landmarks, comfortable level at 8am:
+
+| Measure | Original formula | Revised formula |
+| --- | ---: | ---: |
+| Trips with more recorded collisions than shortest route | 70 | 27 |
+| Mean share of route distance on mapped lanes/trails | 55.5% | 46.7% |
+| Median extra distance versus shortest route | 1.6% | 1.3% |
+| Routes changing between 8am and 10pm | 22 | 29 |
+| Routes changing between new and confident rider levels | 35 | 98 |
+
+Shortest routes average 28.7% mapped lane/trail coverage. Summing distinct
+collision counts per trip gives 1,278 originally and 855 after revision (33.1%
+lower). A collision can appear on several trips, so these sums are **not counts
+of unique citywide injuries**. This is a descriptive comparison used for tuning,
+not independent validation or a prediction of real-world safety. The full
+[snapshot and provenance](docs/routing-evaluation.json) can be reproduced with:
+
+```sh
+.venv/bin/python scripts/evaluate_routing.py --output docs/routing-evaluation.json
+```
+
+The original specification is kept unchanged for reference; the approved tuning
+above and the shared `AGENTS.md` describe the current model.
 
 `ksi_total` counts distinct collision IDs across visited nodes, including the
 origin; `ksi_fatal` counts the fatal subset. A record near multiple route nodes
@@ -188,6 +236,8 @@ prepare_data.py             Repeatable official-data download/cache build
 static/collisions.json     Minimal real records for the initial map
 tests/test_routing.py       Parser, model, and API regression tests
 scripts/browser_smoke.mjs   Desktop/mobile interaction and failure checks
+scripts/evaluate_routing.py Original/current real-route comparison
+docs/routing-evaluation.json Recorded comparison with source provenance
 data/                      Ignored raw data and graph cache
 ```
 

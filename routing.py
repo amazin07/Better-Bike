@@ -13,6 +13,10 @@ from scipy.spatial import cKDTree
 
 CENTER = (43.6629, -79.3957)
 ALPHAS = {1: 0.9, 2: 0.5, 3: 0.2}
+# Heuristic metres of lane-weighted distance at maximum normalized node risk.
+# Keep infrastructure discounts strong; do not discount the collision penalty.
+RISK_PENALTY_M = 600.0
+MODEL_VERSION = "lane-priority-node-penalty-v2"
 PROJECT = Transformer.from_crs(4326, 26917, always_xy=True)
 
 
@@ -125,18 +129,30 @@ class Router:
     def __init__(self, graph, records, metadata=None):
         self.graph = graph
         self.records = {r.id: r for r in records}
-        self.metadata = metadata or {}
+        self.metadata = dict(metadata or {})
         self.nodes = list(graph)
         self.tree = cKDTree([PROJECT.transform(graph.nodes[n]["x"], graph.nodes[n]["y"]) for n in self.nodes])
-        self.risks = {hour: self._risk(hour) for hour in range(24)}
+        raw_risks = {hour: self._raw_risk(hour) for hour in range(24)}
+        # One scale across all hours: doubling a record's time weight must not
+        # disappear because that hour's maximum also doubled.
+        self.risk_scale = max((max(values.values(), default=0) for values in raw_risks.values()), default=0) or 1
+        self.risks = {hour: {node: value / self.risk_scale for node, value in values.items()}
+                      for hour, values in raw_risks.items()}
+        self.metadata["routing_model"] = {"version": MODEL_VERSION, "risk_penalty_m": RISK_PENALTY_M,
+                                          "normalization_peak": self.risk_scale}
         self.points = [record.public() for record in records]
 
-    def _risk(self, hour):
-        values = {n: sum((3.0 if self.records[i].fatal else 1.0) * time_weight(self.records[i].hour, hour)
-                         for i in set(data.get("collision_ids", [])))
-                  for n, data in self.graph.nodes(data=True)}
-        maximum = max(values.values(), default=0) or 1
-        return {node: value / maximum for node, value in values.items()}
+    def _raw_risk(self, hour):
+        return {n: sum((3.0 if self.records[i].fatal else 1.0) * time_weight(self.records[i].hour, hour)
+                       for i in set(data.get("collision_ids", [])))
+                for n, data in self.graph.nodes(data=True)}
+
+    def edge_cost(self, destination, data, alpha, hour):
+        length = float(data["length"])
+        if alpha == 0:
+            return length
+        return (length * data.get("lane_multiplier", 1.0)
+                + alpha * RISK_PENALTY_M * self.risks[hour][destination])
 
     def nearest(self, coordinate):
         distance, index = self.tree.query(PROJECT.transform(coordinate[1], coordinate[0]))
@@ -146,10 +162,7 @@ class Router:
 
     def _route(self, start, end, alpha, hour):
         def edge_cost(v, data):
-            length = float(data["length"])
-            if alpha == 0:
-                return length
-            return length * data.get("lane_multiplier", 1.0) * (1 + alpha * self.risks[hour][v])
+            return self.edge_cost(v, data, alpha, hour)
 
         def weight(u, v, edges):
             return min(edge_cost(v, data) for data in edges.values())

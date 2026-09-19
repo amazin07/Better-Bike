@@ -78,10 +78,12 @@ def test_node_radius_and_unique_route_counts():
 
 def test_distance_baseline_risk_detour_and_level():
     g = graph()
+    g[1][3][0]["length"] = 200
+    g[3][4][0]["length"] = 200
     g.nodes[2]["collision_ids"] = ["a"]
     router = Router(g, [record()])
     assert router._route(1, 4, 0, 8)["distance_m"] == 200
-    assert router._route(1, 4, 0.9, 8)["distance_m"] == 260
+    assert router._route(1, 4, 0.9, 8)["distance_m"] == 400
     assert router._route(1, 4, 0.2, 8)["distance_m"] == 200
     g[1][3][0]["lane_multiplier"] = 0.55
     g[3][4][0]["lane_multiplier"] = 0.55
@@ -90,7 +92,7 @@ def test_distance_baseline_risk_detour_and_level():
 
 def test_hour_changes_route():
     g = graph()
-    # Two corridors, different collision times; normalized maximum changes by hour.
+    # Two corridors, different collision times, one common normalization scale.
     g[1][3][0]["length"] = 115
     g[3][4][0]["length"] = 115
     g.nodes[2]["collision_ids"] = ["a"]
@@ -98,6 +100,62 @@ def test_hour_changes_route():
     router = Router(g, [record("a", 8), record("b", 22)])
     assert router._route(1, 4, 0.9, 8)["distance_m"] == 230
     assert router._route(1, 4, 0.9, 22)["distance_m"] == 200
+
+
+@pytest.mark.parametrize("lane", [0.55, 0.80])
+def test_lane_priority_accepts_a_longer_route_with_equal_history(lane):
+    g = graph()
+    g[1][3][0]["length"] = 120
+    g[3][4][0]["length"] = 120
+    g[1][3][0]["lane_multiplier"] = lane
+    g[3][4][0]["lane_multiplier"] = lane
+    router = Router(g, [])
+    for alpha in (0.2, 0.5, 0.9):
+        assert router._route(1, 4, alpha, 8)["distance_m"] == 240
+    assert router._route(1, 4, 0, 8)["distance_m"] == 200
+
+
+def test_protected_lane_preferred_over_painted_lane():
+    g = graph()
+    for u, v in [(1, 2), (2, 4)]:
+        g[u][v][0]["lane_multiplier"] = 0.8
+    for u, v in [(1, 3), (3, 4)]:
+        g[u][v][0]["lane_multiplier"] = 0.55
+    router = Router(g, [])
+    assert router._route(1, 4, 0.5, 8)["distance_m"] == 260
+
+
+def test_node_penalty_not_erased_by_a_short_protected_approach():
+    g = graph()
+    g[1][2][0].update(length=1, lane_multiplier=0.55)
+    g[2][4][0].update(length=199, lane_multiplier=0.55)
+    g.nodes[2]["collision_ids"] = ["a"]
+    router = Router(g, [record(fatal=True)])
+    assert router._route(1, 4, 0.5, 8)["ksi_total"] == 0
+    # Splitting an approach into shorter edges must not dilute intersection risk.
+    g.add_node(5, x=-79.3895, y=43.66, collision_ids=[])
+    g.remove_edge(1, 2)
+    g.add_edge(1, 5, length=0.9, lane_multiplier=0.55)
+    g.add_edge(5, 2, length=0.1, lane_multiplier=0.55)
+    split = Router(g, [record(fatal=True)])
+    assert split._route(1, 4, 0.5, 8)["ksi_total"] == 0
+
+
+def test_common_scale_preserves_time_boost_even_with_one_risk_node():
+    g = graph()
+    g.nodes[2]["collision_ids"] = ["a"]
+    router = Router(g, [record(hour=23)])
+    assert router.risks[1][2] == 2 * router.risks[12][2]
+    assert all(0 <= risk <= 1 for values in router.risks.values() for risk in values.values())
+
+
+def test_fatal_weight_and_missing_time_survive_normalization():
+    g = graph()
+    g.nodes[2]["collision_ids"] = ["a"]
+    g.nodes[3]["collision_ids"] = ["b"]
+    router = Router(g, [record("a", None, True), record("b", None, False)])
+    assert router.risks[8][2] == 3 * router.risks[8][3]
+    assert router.risks[8] == router.risks[22]
 
 
 def test_parallel_edge_selection_preserves_geometry():
