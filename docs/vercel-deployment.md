@@ -30,7 +30,11 @@ Rebuild after updating the source datasets:
 ```
 
 Local development prefers the trusted pickle; Vercel always loads the JSON bundle.
-Never publish `.env`, `.projects`, service-account files, raw CSVs or pickle caches.
+Commit the CLI-generated `.projects/state.json` manifest so teammates and the
+Stripe hackathon submission can identify this project. Stripe documents this
+metadata as safe for version control. Do not hand-edit it. All other `.projects`
+files remain ignored, including the credential vault and local state.
+Never publish `.env`, service-account files, raw CSVs or pickle caches.
 Both `.vercelignore` and function exclusions protect local files; provide hosted
 credentials through Vercel environment variables, not uploaded credential files.
 
