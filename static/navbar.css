@@ -1,0 +1,150 @@
+/* Shared, fixed top navbar for every page: BikeBetter (Toronto) on the left, Map and
+   Rentals in the centre, sign in or out on the right. The markup is the same on each
+   page (tests/test_navbar.py keeps the copies identical); only the current link differs.
+   Pages leave room for the bar with --nav-h. */
+:root {
+  --nav-h: 64px;
+}
+.site-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--nav-h);
+  z-index: 1200; /* above the map panels and Leaflet controls */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--line, #e3e3df);
+  color: var(--ink, #1a1d21);
+  font-family: "IBM Plex Sans", sans-serif;
+  line-height: 1.3; /* pages set different defaults; the bar must not vary with them */
+}
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+  min-width: 0;
+  color: var(--ink, #1a1d21);
+  text-decoration: none;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+.site-brand svg {
+  flex: none;
+  color: var(--blue, #14467d);
+}
+.site-city {
+  padding-left: 10px;
+  border-left: 1px solid var(--line, #e3e3df);
+  color: var(--muted, #6b7178);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.site-links {
+  display: flex;
+  gap: 6px;
+  justify-self: center;
+}
+.site-links a {
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted, #6b7178);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.site-links a:hover {
+  color: var(--ink, #1a1d21);
+}
+.site-links a[aria-current="page"] {
+  color: var(--blue, #14467d);
+  border-color: var(--line, #e3e3df);
+  background: var(--paper, #f7f7f5);
+}
+.site-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: end;
+  min-width: 0;
+}
+.site-account #account-name {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--muted, #6b7178);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-account button {
+  padding: 8px 14px;
+  border: 1px solid var(--line, #e3e3df);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--ink, #1a1d21);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.site-account button:hover:not(:disabled) {
+  border-color: var(--blue, #14467d);
+}
+.site-account button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.site-nav a:focus-visible,
+.site-account button:focus-visible {
+  outline: 2px solid var(--blue, #14467d);
+  outline-offset: 3px;
+}
+@media (max-width: 720px) {
+  :root {
+    --nav-h: 56px;
+  }
+  .site-nav {
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .site-brand {
+    gap: 8px;
+    font-size: 17px;
+  }
+  .site-city,
+  .site-account #account-name {
+    display: none;
+  }
+  .site-links a {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .site-account button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+@media (max-width: 400px) {
+  .site-brand svg {
+    display: none;
+  }
+  .site-brand {
+    font-size: 16px;
+  }
+  .site-links a {
+    padding: 6px 7px;
+  }
+  .site-account button {
+    padding: 6px 8px;
+    font-size: 11.5px;
+  }
+}

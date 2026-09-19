@@ -377,6 +377,9 @@ tests/test_routing.py       Parser, model, and API regression tests
 tests/test_traffic.py       Traffic cache, HERE client, and overlay API tests (no network)
 tests/test_scoring.py       Score formula, congestion matching, and score API tests
 tests/test_selection.py     Riding-style route selection and the selection API field
+tests/test_navbar.py        Shared navbar: identical markup on both pages, fixed, layout below it
+static/navbar.css           Shared fixed navbar styles (BikeBetter · Toronto, Map/Rentals, sign in/out)
+static/nav-auth.js          Sign in/out for the navbar on the map page (Rentals wires its own in rentals.js)
 scripts/browser_smoke.mjs   Desktop/mobile interaction and failure checks
 scripts/evaluate_routing.py Original/current real-route comparison
 docs/routing-evaluation.json Recorded comparison with source provenance

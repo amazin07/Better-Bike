@@ -40,6 +40,14 @@ Never fabricate collision statistics.
   recorded collisions is not proof of safety. Traffic joins the score only while
   the Live traffic switch is on and fresh HERE data is cached; a route request must
   never call HERE. Constants and rationale live in `scoring.py` and the README.
+- **One fixed navbar on every page** (`static/navbar.css`): BikeBetter (Toronto) on
+  the left, Map / Rentals in the centre, Sign in with Google / Sign out on the right.
+  The markup is copied into `index.html` and `rentals.html`; keep the copies identical
+  (`tests/test_navbar.py` enforces it) and change only the `aria-current` link. Pages
+  leave room for the bar with `--nav-h` (64px, 56px on phones). The map page wires the
+  sign-in button in `static/nav-auth.js`; the Rentals page wires the same button ids in
+  `rentals.js`. Keep the button wording ("Sign in with Google", "Sign out",
+  "Unavailable") the same in both.
 - There is **no time-of-day control and no forecasting**. The website always sends
   the current Toronto hour, read fresh on every request; the API `hour` field and
   the model's hour weighting remain.

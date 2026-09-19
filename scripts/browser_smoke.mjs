@@ -82,6 +82,13 @@ try {
     ),
   );
   checks.push("Empty map, real collision layer, desktop bounds");
+  // The shared fixed navbar (same bar as the Rentals page); panels sit below it.
+  assert(
+    await evaluate(
+      "(() => { const nav = document.querySelector('.site-nav'); const bar = nav.getBoundingClientRect(); const links = [...nav.querySelectorAll('.site-links a')].map((a) => a.textContent.trim()); return getComputedStyle(nav).position === 'fixed' && bar.top === 0 && bar.height >= 56 && links.join() === 'Map,Rentals' && nav.querySelector('[aria-current=\"page\"]').textContent.trim() === 'Map' && nav.querySelector('.site-brand').textContent.includes('BikeBetter') && nav.querySelector('.site-city').textContent.trim() === 'Toronto' && !!document.getElementById('auth-button') && document.querySelector('.controls').getBoundingClientRect().top >= bar.bottom && document.querySelector('.comparison').getBoundingClientRect().top >= bar.bottom; })()",
+    ),
+  );
+  checks.push("Fixed navbar: brand, Map/Rentals, sign-in; panels sit below it");
   await screenshot("desktop-empty");
 
   await evaluate(
@@ -228,6 +235,12 @@ try {
   await evaluate("$('toggle').click();");
   assert(
     await evaluate("$('toggle').getAttribute('aria-expanded') === 'true'"),
+  );
+  // On a phone the navbar still fits in one row: brand, links, and the sign-in button.
+  assert(
+    await evaluate(
+      "(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const brand = r('.site-brand'), links = r('.site-links'), button = r('#auth-button'); return brand.right <= links.left && links.right <= button.left && button.right <= innerWidth && r('.site-nav').height <= 64 && r('.controls').top >= r('.site-nav').bottom; })()",
+    ),
   );
   checks.push("Mobile layout, readable comparison, expandable controls");
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));

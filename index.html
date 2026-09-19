@@ -25,6 +25,7 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
+    <link rel="stylesheet" href="/static/navbar.css" />
     <style>
       :root {
         --paper: #f7f7f5;
@@ -73,7 +74,10 @@
       }
       #map {
         position: fixed;
-        inset: 0;
+        top: var(--nav-h);
+        right: 0;
+        bottom: 0;
+        left: 0;
         background: #e9eeeb;
         z-index: 0;
       }
@@ -103,62 +107,16 @@
         z-index: 500;
       }
       .controls {
-        top: 24px;
+        top: calc(var(--nav-h) + 24px);
         left: 24px;
         width: 340px;
       }
-      .page-nav {
-        top: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 6px;
-        padding: 6px;
-        z-index: 600;
-      }
-      .page-nav a {
-        padding: 7px 14px;
-        border-radius: 2px;
-        color: var(--muted);
-        text-decoration: none;
-        border: 1px solid transparent;
-        font-weight: 500;
-      }
-      .page-nav a.active {
-        color: var(--blue);
-        border-color: var(--line);
-        background: var(--paper);
-      }
-      .page-nav a:hover {
-        color: var(--ink);
-      }
       .brand {
-        padding: 24px 24px 21px;
+        padding: 16px 24px;
         border-bottom: 1px solid var(--line);
       }
-      .brand-line {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .brand svg {
-        color: var(--blue);
-      }
-      h1 {
-        font-size: 24px;
-        letter-spacing: -0.8px;
-        font-weight: 600;
-        margin: 0;
-      }
-      .city {
-        font-size: 12px;
-        color: var(--muted);
-        margin-left: auto;
-        border-left: 1px solid var(--line);
-        padding-left: 12px;
-      }
       .tagline {
-        margin: 9px 0 0;
+        margin: 0;
         color: var(--muted);
         font-size: 13px;
       }
@@ -353,13 +311,13 @@
           transition: none;
         }
       }
-      /* Centred under the "Map | Rentals" nav. It lives inside the left panel but
-         is absolutely positioned, so it adds no height to that panel and the
-         legend cannot cover it. 24px is the panel's left offset; 60px clears the
-         nav. On phones it drops into the panel's normal flow (see the
+      /* Centred on the page, level with the top of the panels below the navbar. It
+         lives inside the left panel but is absolutely positioned, so it adds no
+         height to that panel and the legend cannot cover it. 24px is the panel's
+         left offset. On phones it drops into the panel's normal flow (see the
          max-width: 760px rules). */
       .traffic-control {
-        top: 60px;
+        top: 0;
         left: calc(50vw - 24px);
         transform: translateX(-50%);
         width: max-content;
@@ -454,10 +412,10 @@
         text-underline-offset: 3px;
       }
       .comparison {
-        top: 24px;
+        top: calc(var(--nav-h) + 24px);
         right: 24px;
         width: 300px;
-        max-height: calc(100vh - 48px);
+        max-height: calc(100vh - var(--nav-h) - 48px);
         overflow-y: auto;
       }
       .comparison-header {
@@ -715,17 +673,17 @@
       }
       @media (min-width: 761px) and (max-height: 760px) {
         .brand {
-          padding: 17px 22px;
+          padding: 13px 22px;
         }
         .section {
           padding: 15px 22px;
         }
         .controls {
-          top: 18px;
+          top: calc(var(--nav-h) + 18px);
           left: 18px;
         }
         .comparison {
-          top: 18px;
+          top: calc(var(--nav-h) + 18px);
           right: 18px;
         }
         .rider-copy {
@@ -761,7 +719,7 @@
       }
       @media (max-width: 760px) {
         .controls {
-          top: 12px;
+          top: calc(var(--nav-h) + 12px);
           left: 12px;
           right: 12px;
           width: auto;
@@ -771,18 +729,10 @@
           display: flex;
           align-items: center;
           justify-content: space-between;
-        }
-        .brand-line {
-          gap: 8px;
-        }
-        h1 {
-          font-size: 21px;
-        }
-        .city {
-          margin-left: 8px;
+          gap: 12px;
         }
         .tagline {
-          display: none;
+          font-size: 12px;
         }
         .mobile-toggle {
           display: block;
@@ -961,49 +911,31 @@
     </style>
   </head>
   <body>
+    <header class="site-nav">
+      <a class="site-brand" href="/">
+        <svg width="24" height="24" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <circle cx="6.5" cy="20" r="5" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="21.5" cy="20" r="5" stroke="currentColor" stroke-width="1.6" />
+          <path d="m6.5 20 6-11 9 11M6.5 20h10l-6-14H7m5.5 3h7l-2-4h-3" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        </svg>
+        <span class="site-brand-name">BikeBetter</span>
+        <span class="site-city">Toronto</span>
+      </a>
+      <nav class="site-links" aria-label="Main">
+        <a href="/" aria-current="page">Map</a>
+        <a href="/rentals">Rentals</a>
+      </nav>
+      <div class="site-account">
+        <span id="account-name"></span>
+        <button type="button" id="auth-button" disabled>Connecting…</button>
+      </div>
+    </header>
     <div id="map" aria-label="Toronto cycling route map"></div>
-    <nav class="page-nav panel" aria-label="Switch section">
-      <a href="/" class="active" aria-current="page">Map</a>
-      <a href="/rentals">Rentals</a>
-    </nav>
     <main>
       <section class="panel controls" aria-label="Plan your ride">
         <header class="brand">
-          <div>
-            <div class="brand-line">
-              <svg
-                width="27"
-                height="27"
-                viewBox="0 0 28 28"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="6.5"
-                  cy="20"
-                  r="5"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                />
-                <circle
-                  cx="21.5"
-                  cy="20"
-                  r="5"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                />
-                <path
-                  d="m6.5 20 6-11 9 11M6.5 20h10l-6-14H7m5.5 3h7l-2-4h-3"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              <h1>BikeBetter</h1>
-              <span class="city">Toronto</span>
-            </div>
-            <p class="tagline">A little more time. A different way home.</p>
-          </div>
+          <h1 class="sr-only">BikeBetter route planner</h1>
+          <p class="tagline">A little more time. A different way home.</p>
           <button
             class="mobile-toggle"
             id="toggle"
@@ -1844,6 +1776,12 @@
         );
         $("comparison-hour").textContent =
           `Right now · ${hourLabel(torontoHour())}`;
+        // Sign-in errors from the shared navbar (static/nav-auth.js) use the map's
+        // own notice line and clear themselves.
+        window.addEventListener("bikebetter:notice", (event) => {
+          notice(String(event.detail));
+          setTimeout(() => notice(""), 8000);
+        });
         $("toggle").addEventListener("click", () => {
           const collapsed = document
             .querySelector(".controls")
@@ -1962,5 +1900,6 @@
       }
       init();
     </script>
+    <script type="module" src="/static/nav-auth.js"></script>
   </body>
 </html>

@@ -12,17 +12,26 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/rentals.css" />
+    <link rel="stylesheet" href="/static/navbar.css" />
   </head>
   <body>
-    <header>
-      <a class="brand" href="/">BikeBetter <span>Toronto</span></a>
-      <nav aria-label="Main">
-        <a href="/">Route planner</a
-        ><a href="/rentals" aria-current="page">Bikes & rentals</a>
+    <header class="site-nav">
+      <a class="site-brand" href="/">
+        <svg width="24" height="24" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <circle cx="6.5" cy="20" r="5" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="21.5" cy="20" r="5" stroke="currentColor" stroke-width="1.6" />
+          <path d="m6.5 20 6-11 9 11M6.5 20h10l-6-14H7m5.5 3h7l-2-4h-3" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        </svg>
+        <span class="site-brand-name">BikeBetter</span>
+        <span class="site-city">Toronto</span>
+      </a>
+      <nav class="site-links" aria-label="Main">
+        <a href="/">Map</a>
+        <a href="/rentals" aria-current="page">Rentals</a>
       </nav>
-      <div class="account">
-        <span id="account-name"></span
-        ><button id="auth-button" disabled>Connecting…</button>
+      <div class="site-account">
+        <span id="account-name"></span>
+        <button type="button" id="auth-button" disabled>Connecting…</button>
       </div>
     </header>
     <main>
