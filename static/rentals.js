@@ -16,7 +16,11 @@ let client,
   privateListeners = [],
   pendingRegistration = false,
   editing = null,
-  requestedBike = null;
+  requestedBike = null,
+  reportedBike = null;
+// bikeId -> its open "missing" theft report, so owned bikes show recovery controls.
+const myReports = new Map();
+let myBikes = [];
 const money = (cents) =>
   new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(
     cents / 100,
@@ -168,9 +172,31 @@ function renderBikes(id, bikes, own = false) {
       );
     if (bike.description)
       card.append(node("p", bike.description, "description"));
+    const report = own ? myReports.get(bike.id) : null;
+    if (report)
+      card.append(
+        node(
+          "p",
+          report.rewardCents > 0
+            ? `Reported missing · ${money(report.rewardCents)} reward on the public feed`
+            : "Reported missing on the public feed",
+          "meta",
+        ),
+      );
     const buttons = node("div", "", "actions");
     if (own) {
       buttons.append(action("View / edit", () => openBike(bike)));
+      if (report)
+        buttons.append(
+          action("Mark recovered", async () => {
+            await client.store.markRecovered(report.id);
+            notice("Marked recovered. It is off the Missing bikes page.");
+          }),
+        );
+      else
+        buttons.append(
+          action("Report stolen", () => openReport(bike)),
+        );
       if (bike.published)
         buttons.append(
           action("Unpublish", async () => {
@@ -522,6 +548,43 @@ $("request-form").onsubmit = (event) => {
     "request-error",
   );
 };
+function openReport(bike) {
+  reportedBike = bike.id;
+  $("report-form").reset();
+  $("report-error").textContent = "";
+  $("report-bike").textContent = `${bike.brand} ${bike.model}`;
+  $("report-form").elements.contactEmail.value = user?.email || "";
+  $("report-dialog").showModal();
+  $("report-form").elements.lastSeenLocation.focus();
+}
+$("report-form").onsubmit = (event) => {
+  event.preventDefault();
+  $("report-error").textContent = "";
+  busy(
+    event.submitter,
+    async () => {
+      const data = Object.fromEntries(new FormData(event.target));
+      const rewardText = String(data.reward || "").trim();
+      let rewardCents = 0;
+      if (rewardText) {
+        if (!/^\d+(?:\.\d{1,2})?$/.test(rewardText))
+          throw new Error("Reward must be a CAD amount like 50 or 50.00.");
+        rewardCents = Math.round(Number(rewardText) * 100);
+        if (rewardCents > 100000)
+          throw new Error("Reward must be at most $1,000.");
+      }
+      await client.store.reportStolen(reportedBike, {
+        lastSeenLocation: data.lastSeenLocation,
+        description: data.description,
+        contactEmail: data.contactEmail,
+        rewardCents,
+      });
+      $("report-dialog").close();
+      notice("Reported. It is now on the public Missing bikes page.");
+    },
+    "report-error",
+  );
+};
 $("auth-button").onclick = () =>
   busy($("auth-button"), () => (user ? client.signOut() : client.signIn()));
 let connectInstance = null;
@@ -615,7 +678,10 @@ async function start() {
       form.reset();
       resetPhoto();
       $("request-form").reset();
-      editing = requestedBike = null;
+      $("report-form").reset();
+      editing = requestedBike = reportedBike = null;
+      myReports.clear();
+      myBikes = [];
       renderBikes("listings", listings);
       for (const id of ["my-bikes", "incoming", "outgoing"])
         empty(
@@ -640,8 +706,22 @@ async function start() {
         try {
           privateListeners.push(
             client.store.watchMyBikes(
-              guarded((bikes) => renderBikes("my-bikes", bikes, true)),
+              guarded((bikes) => {
+                myBikes = bikes;
+                renderBikes("my-bikes", bikes, true);
+              }),
               (error) => empty("my-bikes", errorMessage(error)),
+            ),
+          );
+          privateListeners.push(
+            client.store.watchMyReports(
+              guarded((rows) => {
+                myReports.clear();
+                for (const row of rows)
+                  if (row.status === "missing") myReports.set(row.bikeId, row);
+                renderBikes("my-bikes", myBikes, true);
+              }),
+              (error) => notice(errorMessage(error), true),
             ),
           );
           for (const direction of ["incoming", "outgoing"])

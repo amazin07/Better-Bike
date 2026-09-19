@@ -14,6 +14,7 @@ from scoring import safety_score
 from traffic import DEFAULT_BOUNDS, TrafficCache, load_env_file
 from firebase_config import public_firebase_config
 from payments import payments_blueprint, public_payment_config
+from rewards import rewards_blueprint
 
 ROOT = Path(__file__).resolve().parent
 LANDMARKS = [
@@ -57,6 +58,7 @@ def validate_payload(payload):
 def create_app(router=None, cache_path=None, traffic=None):
     app = Flask(__name__, static_folder=str(ROOT / "static"))
     app.register_blueprint(payments_blueprint())
+    app.register_blueprint(rewards_blueprint())
     app.config["MAX_CONTENT_LENGTH"] = 8192
     @app.before_request
     def payment_payload_limit():
@@ -101,9 +103,8 @@ def create_app(router=None, cache_path=None, traffic=None):
         # Only Stripe's npm loading wrapper is local; Connect.js comes from Stripe.
         return send_from_directory(ROOT / "node_modules/@stripe/connect-js/dist", "pure.esm.js")
 
-    @app.get("/rentals")
-    def rentals():
-        response = send_from_directory(ROOT, "rentals.html")
+    def firebase_page(filename):
+        response = send_from_directory(ROOT, filename)
         local_connect = " http://127.0.0.1:8080 http://127.0.0.1:9099" if os.getenv("FIREBASE_USE_EMULATORS") == "1" else ""
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
@@ -115,6 +116,14 @@ def create_app(router=None, cache_path=None, traffic=None):
         )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
+
+    @app.get("/rentals")
+    def rentals():
+        return firebase_page("rentals.html")
+
+    @app.get("/missing")
+    def missing():
+        return firebase_page("missing-bikes.html")
 
     @app.get("/api/health")
     def health():

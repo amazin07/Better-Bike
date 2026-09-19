@@ -65,6 +65,7 @@ export function createBikeStore({ db, auth, firestore: f }) {
   };
   const bikeRef = (id) => f.doc(db, "bikes", id);
   const requestRef = (id) => f.doc(db, "rentalRequests", id);
+  const reportRef = (id) => f.doc(db, "theftReports", id);
   const rows = (snap) =>
     snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   const watch = (constraints, success, error, collection = "bikes") =>
@@ -98,6 +99,73 @@ export function createBikeStore({ db, auth, firestore: f }) {
     watchPayments: (direction, success, error) => watch([
       f.where(direction === 'incoming' ? 'ownerUid' : 'renterUid', '==', user().uid),
     ], success, error, 'rentalPayments'),
+
+    // Public: anyone can watch the missing-bike feed without signing in.
+    watchMissing: (success, error) =>
+      watch([f.where("status", "==", "missing")], success, error, "theftReports"),
+    watchMyReports: (success, error) =>
+      watch([f.where("ownerUid", "==", user().uid)], success, error, "theftReports"),
+
+    async reportStolen(bikeId, { lastSeenLocation, description, contactEmail, rewardCents } = {}) {
+      const u = user();
+      const location = clean(lastSeenLocation, "Last seen location", 120, true);
+      const desc = clean(description, "Description", 1000);
+      const email = clean(contactEmail || u.email, "Contact email", 254, true);
+      const reward =
+        Number.isInteger(rewardCents) && rewardCents >= 0 && rewardCents <= 100000
+          ? rewardCents
+          : 0;
+      const bikeSnap = await f.getDoc(bikeRef(bikeId));
+      if (!bikeSnap.exists() || bikeSnap.data().ownerUid !== u.uid)
+        throw new Error("This bike is not in your account.");
+      const bike = bikeSnap.data();
+      let photoDataUrl = "";
+      if (bike.photoVersion) {
+        try {
+          photoDataUrl = await this.photo(bikeId);
+        } catch {
+          photoDataUrl = "";
+        }
+      }
+      const ref = f.doc(f.collection(db, "theftReports"));
+      await f.setDoc(ref, {
+        bikeId,
+        ownerUid: u.uid,
+        title: `${bike.brand} ${bike.model}`,
+        colour: bike.colour || "",
+        type: bike.type || "",
+        neighbourhood: bike.neighbourhood || "",
+        lastSeenLocation: location,
+        description: desc,
+        contactEmail: email,
+        rewardCents: reward,
+        status: "missing",
+        photoDataUrl:
+          photoDataUrl && photoDataUrl.length <= 220000 ? photoDataUrl : "",
+        createdAt: f.serverTimestamp(),
+        updatedAt: f.serverTimestamp(),
+      });
+      // A stolen bike should not stay rentable: pull any live listing.
+      if (bike.published)
+        await f.updateDoc(bikeRef(bikeId), {
+          published: false,
+          updatedAt: f.serverTimestamp(),
+        });
+      return ref.id;
+    },
+
+    async markRecovered(reportId) {
+      const u = user();
+      await f.runTransaction(db, async (tx) => {
+        const snap = await tx.get(reportRef(reportId));
+        if (!snap.exists() || snap.data().ownerUid !== u.uid)
+          throw new Error("This report is not in your account.");
+        tx.update(snap.ref, {
+          status: "recovered",
+          updatedAt: f.serverTimestamp(),
+        });
+      });
+    },
 
     async privateDetails(id) {
       user();

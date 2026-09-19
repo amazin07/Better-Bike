@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#F7F7F5" />
+    <title>Missing bikes · BikeBetter Toronto</title>
+    <meta
+      name="description"
+      content="Reported missing and stolen bikes across Toronto. Watch for them, and help return one for a reward."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/rentals.css" />
+    <link rel="stylesheet" href="/static/navbar.css" />
+    <style>
+      .badge.missing {
+        color: #c1272d;
+        border-color: #c1272d;
+      }
+      .reward {
+        font-weight: 600;
+        color: #14467d;
+      }
+      .last-seen {
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-nav">
+      <a class="site-brand" href="/">
+        <svg width="24" height="24" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <circle cx="6.5" cy="20" r="5" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="21.5" cy="20" r="5" stroke="currentColor" stroke-width="1.6" />
+          <path d="m6.5 20 6-11 9 11M6.5 20h10l-6-14H7m5.5 3h7l-2-4h-3" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        </svg>
+        <span class="site-brand-name">BikeBetter</span>
+        <span class="site-city">Toronto</span>
+      </a>
+      <nav class="site-links" aria-label="Main">
+        <a href="/">Map</a>
+        <a href="/rentals">Rentals</a>
+        <a href="/missing" aria-current="page">Missing bikes</a>
+      </nav>
+      <div class="site-account">
+        <span id="account-name"></span>
+        <button type="button" id="auth-button" disabled>Connecting…</button>
+      </div>
+    </header>
+    <main>
+      <div class="intro">
+        <div>
+          <p class="eyebrow">Toronto · Community watch</p>
+          <h1>Missing &amp; stolen bikes</h1>
+          <p>
+            Reported by their owners. If you spot one, contact the owner using
+            the tip line on the listing — some offer a reward for its safe return.
+          </p>
+        </div>
+        <a class="primary" href="/rentals">Report your bike ↗</a>
+      </div>
+      <p id="notice" role="status" aria-live="polite" hidden></p>
+      <div class="section-heading">
+        <h2>Currently reported missing</h2>
+        <span>Rewards in CAD · Stripe test mode</span>
+      </div>
+      <div id="missing" class="grid">
+        <p class="empty">Loading reported bikes…</p>
+      </div>
+      <footer>
+        Listings are posted by BikeBetter members and are not verified police or
+        529 Garage reports. Rewards are paid through Stripe test checkout only.
+      </footer>
+    </main>
+    <noscript><p>Enable JavaScript to view reported missing bikes.</p></noscript>
+    <script type="module" src="/static/missing-bikes.js"></script>
+  </body>
+</html>
