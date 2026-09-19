@@ -68,7 +68,7 @@ try {
   );
   async function login(name) {
     await evaluate(
-      `(async()=>{const a=await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');const token=JSON.stringify({sub:'browser-${name}',email:'${name}@example.test',email_verified:true,name:'${name}',iss:'https://accounts.google.com',aud:'demo-safer-ride',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600});await a.signInWithCredential(a.getAuth(),a.GoogleAuthProvider.credential(token));})()`,
+      `(async()=>{const a=await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js');const token=JSON.stringify({sub:'browser-${name}',email:'${name}@example.test',email_verified:true,name:'${name}',iss:'https://accounts.google.com',aud:'demo-bikebetter',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600});await a.signInWithCredential(a.getAuth(),a.GoogleAuthProvider.credential(token));})()`,
     );
     await waitFor(
       `document.getElementById('account-name').textContent === '${name}'`,

@@ -1,4 +1,4 @@
-"""Live HERE traffic overlay for the Safer Ride map.
+"""Live HERE traffic overlay for the BikeBetter map.
 
 The browser never talks to HERE. Flask holds one in-memory snapshot of HERE's
 flow and incident feeds and serves it to every viewer, so usage is bounded by

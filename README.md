@@ -6,7 +6,7 @@ collision history and the current Toronto hour, and shows each route's ETA and a
 safety score. Built for Future Legends UofT 2026.
 
 Read [AGENTS.md](AGENTS.md) for the shared teammate/agent handoff and
-[the original specification](docs/safer-ride-spec.md) for the product brief.
+[the original specification](docs/bikebetter-spec.md) for the product brief.
 
 ## Run the website
 
@@ -364,7 +364,7 @@ Only load pickle files created locally by the build script.
 
 ```text
 AGENTS.md                   Shared teammate and agent instructions
-docs/safer-ride-spec.md      Original supplied specification
+docs/bikebetter-spec.md      Original supplied specification
 index.html                 Responsive, no-build website
 app.py                     Flask website, validation, and API
 routing.py                 CSV parser, node risk, route calculations
@@ -407,7 +407,7 @@ Firebase tests require Java 21 and Firebase CLI and use a separate local demo
 project. No test data is written to the live database.
 
 For the browser smoke check, start Flask, start Chrome with
-`--remote-debugging-port=9224 --user-data-dir=/tmp/safer-ride-browser`, and open
+`--remote-debugging-port=9224 --user-data-dir=/tmp/bikebetter-browser`, and open
 `http://127.0.0.1:5001`. With Node 22 or newer, run
 `node scripts/browser_smoke.mjs`. It checks clicks, local search, the ETA-first
 cards and scores, riding styles, stale responses, routing failure, and mobile

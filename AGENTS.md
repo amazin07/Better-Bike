@@ -1,6 +1,6 @@
-# Safer Ride — shared agent instructions
+# BikeBetter — shared agent instructions
 
-Read this file and `docs/safer-ride-spec.md` before changing the project. This is
+Read this file and `docs/bikebetter-spec.md` before changing the project. This is
 the shared handoff for every teammate and coding agent working in this repo.
 
 ## Product and scope
@@ -22,7 +22,7 @@ Never fabricate collision statistics.
 
 ## Decisions and data pitfalls
 
-- Source spec: `docs/safer-ride-spec.md`. Follow its light civic design, palette,
+- Source spec: `docs/bikebetter-spec.md`. Follow its light civic design, palette,
   IBM Plex Sans, quiet flat panels, and prominent comparison counts.
 - The current Toronto CSV has **changed schema**: `collision_id` replaces
   `ACCNUM`; `accdate` contains date and time; `cyclist` uses `true`/`false`;
@@ -140,7 +140,7 @@ Leaflet CDN assets still need internet in the browser.
 - `firestore.rules` enforces ownership, field types, money in integer cents,
   price snapshots, valid state transitions, and private/public separation.
   Test data changes with `npm ci && npm run test:firebase` (Node 22+, Java 21,
-  Firebase CLI). Tests use only `demo-safer-ride` emulators, never live data.
+  Firebase CLI). Tests use only `demo-bikebetter` emulators, never live data.
 - `FIREBASE_API_KEY` is read from the ignored `.env` by the dev server. It is
   browser configuration, not an admin credential. HERE_API_KEY stays server-only.
   Never commit actual key values or add service-account credentials to the UI.

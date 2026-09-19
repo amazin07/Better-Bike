@@ -59,7 +59,7 @@ const bikeDoc = (db, id) => f.doc(db, "bikes", id);
 const reqDoc = (db, id) => f.doc(db, "rentalRequests", id);
 before(async () => {
   env = await initializeTestEnvironment({
-    projectId: "demo-safer-ride",
+    projectId: "demo-bikebetter",
     firestore: { rules: await readFile("firestore.rules", "utf8") },
   });
 });

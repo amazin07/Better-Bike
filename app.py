@@ -1,4 +1,4 @@
-"""Safer Ride website. All route calculations use the local Toronto cache."""
+"""BikeBetter website. All route calculations use the local Toronto cache."""
 from __future__ import annotations
 
 import logging

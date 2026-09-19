@@ -233,6 +233,6 @@ def test_firebase_configuration_never_exposes_server_credentials(client, monkeyp
     assert "server-only-secret" not in result.text
     monkeypatch.setenv("FIREBASE_USE_EMULATORS", "1")
     local = client.get("/api/config").json["firebase"]
-    assert local["projectId"] == "demo-safer-ride"
+    assert local["projectId"] == "demo-bikebetter"
     assert local["apiKey"] == "demo-api-key"
     assert local["useEmulators"] is True

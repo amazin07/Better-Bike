@@ -11,8 +11,10 @@ The registered web app belongs to `blyatbike`; its public identifiers are in
 (`FIREBASE_API_KEY`, see `.env.example`). The Flask dev entry point loads it;
 production deployments must supply environment variables themselves.
 
-Google sign-in has been deployed. Its display name is **Safer Ride Toronto** and
-its support email is the CLI account, `brian.r.xiao@gmail.com`. Authorized domains
+Google sign-in has been deployed. Its display name is set to **BikeBetter** in
+`firebase.json` (a changed name reaches the live project on the next
+`firebase deploy --only auth --project blyatbike`) and its support email is the
+CLI account, `brian.r.xiao@gmail.com`. Authorized domains
 include `localhost`, `127.0.0.1`, `blyatbike.firebaseapp.com`, and
 `blyatbike.web.app`. Add the eventual website hostname in Firebase Authentication
 settings before using sign-in from a deployed website.
@@ -110,7 +112,7 @@ FIREBASE_USE_EMULATORS=1 .venv/bin/python -c 'from app import create_app; from t
 ```
 
 Open `http://127.0.0.1:5002/rentals`. Google popup sign-in uses fake local
-accounts in this mode. Emulators use project `demo-safer-ride`, auth port 9099,
+accounts in this mode. Emulators use project `demo-bikebetter`, auth port 9099,
 and Firestore port 8080. Never use emulator tokens or test records in the live
 project. Test data is disposable and is not exported on shutdown.
 
