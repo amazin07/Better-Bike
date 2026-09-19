@@ -77,8 +77,23 @@ try {
   await login("owner");
   await evaluate("document.getElementById('register-button').click()");
   await waitFor("document.getElementById('bike-dialog').open");
+  async function uploadPhoto(colour) {
+    await evaluate(
+      `(async()=>{const canvas=document.createElement('canvas');canvas.width=1800;canvas.height=1200;const context=canvas.getContext('2d');context.fillStyle='${colour}';context.fillRect(0,0,1800,1200);context.fillStyle='white';context.font='100px sans-serif';context.fillText('Emulator bike photo',100,400);const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));const files=new DataTransfer();files.items.add(new File([blob],'bike.png',{type:'image/png'}));const input=document.getElementById('bike-photo');input.files=files.files;input.dispatchEvent(new Event('change'));})()`,
+    );
+    await waitFor(
+      "document.getElementById('photo-status').textContent.includes('Photo ready')",
+    );
+    assert(
+      await evaluate(
+        "document.getElementById('photo-preview').src.length <= 220000",
+      ),
+      "Photo compressed to storage limit",
+    );
+  }
+  await uploadPhoto("#14467d");
   await evaluate(
-    `(()=>{const f=document.getElementById('bike-form');Object.entries({brand:'Browser Trek',model:'FX smoke',colour:'Blue',serialNumber:'PRIVATE-BROWSER-SERIAL'}).forEach(([k,v])=>f.elements[k].value=v);document.getElementById('next-button').click()})()`,
+    `(()=>{const f=document.getElementById('bike-form');Object.entries({brand:'Browser Trek',model:'FX smoke',colour:'Blue',serialNumber:''}).forEach(([k,v])=>f.elements[k].value=v);document.getElementById('next-button').click()})()`,
   );
   assert(
     await evaluate(
@@ -96,15 +111,20 @@ try {
   await waitFor("document.getElementById('bike-dialog').open");
   assert(
     await evaluate(
-      "document.getElementById('bike-form').elements.serialNumber.value==='PRIVATE-BROWSER-SERIAL'",
+      "document.getElementById('bike-form').elements.serialNumber.value==='' && document.getElementById('photo-preview').src.startsWith('data:image/jpeg;base64,')",
     ),
-    "Private details persist",
+    "Optional serial number and photo persist",
   );
+  await uploadPhoto("#216640");
   await evaluate(
     `(()=>{document.getElementById('next-button').click();const f=document.getElementById('bike-form');f.elements.published.checked=true;f.elements.published.dispatchEvent(new Event('change'));f.elements.neighbourhood.value='The Annex';f.elements.rateHour.value='8.50';f.elements.rateDay.value='30';document.getElementById('save-button').click()})()`,
   );
   await waitFor(
     "!document.getElementById('bike-dialog').open && document.getElementById('listings').textContent.includes('Browser Trek')",
+  );
+  await evaluate("document.getElementById('tab-browse').click()");
+  await waitFor(
+    "document.querySelector('#listings img.bike-photo')?.naturalWidth > 0",
   );
   await login("renter");
   await evaluate(
@@ -160,6 +180,16 @@ try {
     "No mobile overflow",
   );
   await screenshot("rentals-mobile");
+  await evaluate(
+    "document.getElementById('tab-mine').click();[...document.querySelectorAll('#my-bikes button')].find(b=>b.textContent==='View / edit').click()",
+  );
+  await waitFor("document.getElementById('bike-dialog').open");
+  await evaluate(
+    "document.getElementById('remove-photo').click();document.getElementById('next-button').click();document.getElementById('save-button').click()",
+  );
+  await waitFor(
+    "!document.getElementById('bike-dialog').open && !document.querySelector('#my-bikes img.bike-photo')",
+  );
   await evaluate("document.getElementById('auth-button').click()");
   await waitFor(
     "document.getElementById('auth-button').textContent==='Sign in with Google'",
@@ -172,7 +202,7 @@ try {
   );
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
   console.log(
-    "PASS: private registration, reload/edit, publish, rental request, accept, contacts, return, mobile layout, sign-out privacy.",
+    "PASS: optional serial, photo upload/replace/remove, private registration, reload/edit, publish, rental request, accept, contacts, return, mobile layout, sign-out privacy.",
   );
 } finally {
   ws.close();

@@ -169,18 +169,33 @@
                 maxlength="40"
                 placeholder="e.g. Medium / 54 cm" /></label
             ><label
-              >Serial number <span>· Private</span
-              ><input
-                name="serialNumber"
-                maxlength="80"
-                required
-                autocomplete="off"
+              >Serial number <span>· Optional, private</span
+              ><input name="serialNumber" maxlength="80" autocomplete="off"
             /></label>
           </div>
           <p class="hint">
             Usually stamped under the bottom bracket. Your serial number and
             notes are only visible to you.
           </p>
+          <label for="bike-photo">Bike photo <span>(optional)</span></label>
+          <input
+            id="bike-photo"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            aria-describedby="photo-help"
+          />
+          <p id="photo-help" class="hint">
+            JPEG, PNG, or WebP, up to 15 MB. Your photo stays private unless you
+            publish a rental listing.
+          </p>
+          <img
+            id="photo-preview"
+            class="photo-preview"
+            alt="Bike photo preview"
+            hidden
+          />
+          <button type="button" id="remove-photo" hidden>Remove photo</button>
+          <p id="photo-status" class="hint" role="status"></p>
           <label
             >Private notes <span>(optional)</span
             ><textarea
@@ -201,7 +216,8 @@
           >
           <p class="hint">
             Leave this off to keep the entire bike record private. Publishing
-            shares the bike details below, never your serial number or notes.
+            shares your bike photo and bike details, never your serial number or
+            notes.
           </p>
           <div id="listing-fields" hidden>
             <label

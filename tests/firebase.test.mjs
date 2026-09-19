@@ -298,3 +298,94 @@ test("pending requests can be cancelled or declined, including after a listing i
     "declined",
   );
 });
+
+test("serial number can be omitted, added later, and cleared", async () => {
+  const owner = storeFor("owner");
+  const id = await owner.saveBike({ ...input(), serialNumber: undefined });
+  assert.equal((await owner.privateDetails(id)).serialNumber, "");
+  await owner.saveBike(input(), id);
+  assert.equal(
+    (await owner.privateDetails(id)).serialNumber,
+    "PRIVATE-SERIAL-123",
+  );
+  await owner.saveBike({ ...input(), serialNumber: "" }, id);
+  assert.equal((await owner.privateDetails(id)).serialNumber, "");
+});
+
+const photo = "data:image/jpeg;base64,/9j/2Q==";
+const photoDoc = (db, id) => f.doc(db, "bikes", id, "photos", "main");
+test("photos are owner-only until published and become private when unpublished", async () => {
+  const owner = storeFor("owner"),
+    id = await owner.saveBike({ ...input(), photoDataUrl: photo });
+  assert.equal(await owner.photo(id), photo);
+  const anonymous = env.unauthenticatedContext().firestore();
+  await assertFails(f.getDoc(photoDoc(anonymous, id)));
+  await assertFails(f.getDoc(photoDoc(dbFor("other"), id)));
+  await owner.saveBike(input(true), id);
+  assert.equal((await f.getDoc(photoDoc(anonymous, id))).data().dataUrl, photo);
+  await assertFails(
+    f.updateDoc(photoDoc(dbFor("other"), id), {
+      dataUrl: photo,
+      updatedAt: f.serverTimestamp(),
+    }),
+  );
+  await assertFails(f.deleteDoc(photoDoc(dbFor("other"), id)));
+  await owner.unpublish(id);
+  await assertFails(f.getDoc(photoDoc(anonymous, id)));
+});
+
+test("photo replacement, removal and bike deletion leave no photo behind", async () => {
+  const owner = storeFor("owner"),
+    id = await owner.saveBike({ ...input(), photoDataUrl: photo });
+  const version = (await f.getDoc(bikeDoc(dbFor("owner"), id))).data()
+    .photoVersion;
+  const replacement = "data:image/jpeg;base64,/9j/AAAA/9k=";
+  await owner.saveBike({ ...input(), photoDataUrl: replacement }, id);
+  assert.equal(await owner.photo(id), replacement);
+  assert.notEqual(
+    (await f.getDoc(bikeDoc(dbFor("owner"), id))).data().photoVersion,
+    version,
+  );
+  await owner.saveBike({ ...input(), photoDataUrl: null }, id);
+  assert.equal(await owner.photo(id), "");
+  assert.equal(
+    (await f.getDoc(bikeDoc(dbFor("owner"), id))).data().photoVersion,
+    "",
+  );
+  await owner.saveBike({ ...input(), photoDataUrl: photo }, id);
+  await owner.removeBike(id);
+  await env.withSecurityRulesDisabled(async (c) =>
+    assert.equal((await f.getDoc(photoDoc(c.firestore(), id))).exists(), false),
+  );
+});
+
+test("photo rules reject oversized data, external URLs, SVG, extra private fields and orphan photos", async () => {
+  const owner = storeFor("owner"),
+    db = dbFor("owner"),
+    id = await owner.saveBike(input());
+  for (const dataUrl of [
+    "https://example.com/photo.jpg",
+    "data:image/svg+xml;base64,PHN2Zz4=",
+    "data:image/jpeg;base64," + "A".repeat(220000),
+  ]) {
+    await assertFails(
+      f.setDoc(photoDoc(db, id), { dataUrl, updatedAt: f.serverTimestamp() }),
+    );
+    await assert.rejects(
+      owner.saveBike({ ...input(), photoDataUrl: dataUrl }, id),
+    );
+  }
+  await assertFails(
+    f.setDoc(photoDoc(db, id), {
+      dataUrl: photo,
+      serialNumber: "private",
+      updatedAt: f.serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    f.setDoc(photoDoc(db, "missing-bike"), {
+      dataUrl: photo,
+      updatedAt: f.serverTimestamp(),
+    }),
+  );
+});

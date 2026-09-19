@@ -386,8 +386,10 @@ data/                      Ignored raw data and graph cache
 ## Bike registration and rentals
 
 Open **http://127.0.0.1:5001/rentals** for Google sign-in, private bike
-registration, optional rental listings, and rental requests. Serial numbers and
-owner notes stay private. Owners accept or decline requests and mark bikes
+registration, optional rental listings, and rental requests. Serial numbers are
+optional. Owners can add, replace, or remove one bike photo; it stays private
+until the bike is published. Serial numbers and owner notes stay private.
+Owners accept or decline requests and mark bikes
 returned. Payments and pickup are arranged directly; Stripe and saved routes
 are not implemented.
 

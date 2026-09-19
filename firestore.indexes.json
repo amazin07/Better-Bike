@@ -9,5 +9,7 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "photos", "fieldPath": "dataUrl", "indexes": [] }
+  ]
 }

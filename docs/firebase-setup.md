@@ -42,7 +42,8 @@ it must remain server-only and is never included in `/api/config`.
 ## User workflow and data boundaries
 
 1. Open `/rentals`, sign in with Google, and choose **Register a bike**.
-2. Enter bike details and the serial number. Notes and serial number are private.
+2. Enter bike details. The serial number and bike photo are optional. Notes and
+   serial number are always private; the photo is private until publication.
 3. Keep the rental option unchecked to save privately. To publish, add a pickup
    neighbourhood and hourly/daily CAD rates. Avoid exact home addresses and
    personal contact details in the public description.
@@ -57,7 +58,7 @@ it must remain server-only and is never included in `/api/config`.
 Registration is a private account record, not ownership verification, police
 registration, 529 Garage integration, insurance, or a guarantee of condition.
 Pickup, payment, final price, and disputes are arranged directly. There are no
-email notifications, payments, photos, automated expiry, or date-based inventory.
+email notifications, payments, automated expiry, or date-based inventory.
 The UI shows up to 100 documents per listing/account/request query; pagination
 and abuse controls are follow-up work before opening a large public marketplace.
 
@@ -65,13 +66,32 @@ and abuse controls are follow-up work before opening a large public marketplace.
 | --- | --- | --- |
 | `bikes/{id}` | Owner; everyone when published | Public-safe description, rates, availability, owner UID |
 | `bikes/{id}/private/details` | Owner only | Serial number, private notes |
+| `bikes/{id}/photos/main` | Owner; everyone when parent bike is published | One compressed JPEG |
 | `rentalRequests/{id}` | Owner and renter only | Dates, messages, rate snapshot, contact details, status |
 
 All writes require a verified account and are constrained by `firestore.rules`.
 Unpublishing preserves private registration. Removing a bike removes its private
 details but preserves existing rental requests for the two parties' history.
+Bike deletion also deletes its photo in the same transaction.
 Live listeners clear private views on sign-out. User-entered text renders via
 `textContent`, never HTML. Firebase modules load only on the rentals page.
+
+### Bike photos
+
+Upload one JPEG, PNG, or WebP up to 15 MB from the registration/edit form. The
+browser resizes it to at most 1200 pixels on the longest side, re-encodes to JPEG
+without original EXIF/GPS metadata, and reduces quality/size until the data URL
+is at most 220,000 characters (about 165 KB of image bytes). Preview, replacement,
+and removal take effect on Save. HEIC files must first be exported as JPEG.
+
+The project has billing disabled and no storage bucket. Since
+[Firebase Storage requires Blaze](https://firebase.google.com/docs/storage/faq-and-troubleshooting),
+this limited single-photo feature uses a separate Firestore document with its
+`dataUrl` field excluded from indexes. Card photos load when they become visible;
+listing queries do not include image data. The rules enforce size/type and parent
+ownership/publication. Large galleries and original-resolution uploads require
+moving images to object storage; this implementation is intended for the small
+marketplace demo and uses the existing Firestore storage/read quotas.
 
 ## Local verification without live writes
 
@@ -96,7 +116,8 @@ project. Test data is disposable and is not exported on shutdown.
 
 With Chrome debugging on port 9224 and a tab open to port 5002, run
 `node scripts/rentals_smoke.mjs`. Start with an empty emulator. This tests private
-registration, editing, publication, renter requests, acceptance, contact sharing,
+registration with no serial, photo upload/replacement/removal, editing,
+publication, renter requests, acceptance, contact sharing,
 return, mobile layout, and sign-out cleanup. It refuses to run without the
 emulator marker. Screenshots are saved to ignored `artifacts/`.
 

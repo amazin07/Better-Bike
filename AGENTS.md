@@ -123,6 +123,14 @@ Leaflet CDN assets still need internet in the browser.
   Serial numbers and private notes live in `bikes/{id}/private/details` with
   owner-only rules. Never put private data in the public document: Firestore
   rules cannot hide individual fields from an otherwise readable document.
+- Serial numbers are optional; store an empty string when omitted. One optional
+  bike photo lives in `bikes/{id}/photos/main`, readable by its owner or when the
+  bike is published. `static/bike-photo.js` compresses JPEG/PNG/WebP uploads
+  (15 MB input maximum) to a JPEG data URL capped at 220,000 characters, stripping
+  original metadata. Keep photo data out of listing documents and Firestore
+  indexes. Save/replace/remove photos atomically with bike edits. The current
+  project has no billing enabled, so this bounded photo uses existing Firestore;
+  full-resolution galleries would need a separate storage design.
 - `rentalRequests/{id}` is readable only by the verified owner and renter.
   Request creation shares the renter's Google email; acceptance shares the
   owner's email. UI must disclose this before each action.

@@ -16,7 +16,8 @@ service cloud.firestore {
       return b.keys().hasAll(['ownerUid','brand','model','type','colour','frameSize','neighbourhood',
         'description','rateHourCents','rateDayCents','published','available','activeRequestId','createdAt','updatedAt'])
         && b.keys().hasOnly(['ownerUid','brand','model','type','colour','frameSize','neighbourhood',
-        'description','rateHourCents','rateDayCents','published','available','activeRequestId','createdAt','updatedAt'])
+        'description','rateHourCents','rateDayCents','published','available','activeRequestId','createdAt','updatedAt','photoVersion'])
+        && text(b.get('photoVersion', ''), 0, 36)
         && b.ownerUid == request.auth.uid
         && text(b.brand, 1, 60) && text(b.model, 1, 80)
         && b.type in ['Hybrid','Road','City','Mountain','Electric','Cargo','Other']
@@ -56,8 +57,21 @@ service cloud.firestore {
           && getAfter(bikePath(bikeId)).data.ownerUid == request.auth.uid
           && request.resource.data.keys().hasAll(['serialNumber','notes','updatedAt'])
           && request.resource.data.keys().hasOnly(['serialNumber','notes','updatedAt'])
-          && text(request.resource.data.serialNumber, 1, 80)
+          && text(request.resource.data.serialNumber, 0, 80)
           && text(request.resource.data.notes, 0, 1000)
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if ownsBike(bikeId);
+      }
+
+      match /photos/{photoId} {
+        allow get: if get(bikePath(bikeId)).data.published == true || ownsBike(bikeId);
+        allow create, update: if signedIn() && photoId == 'main'
+          && getAfter(bikePath(bikeId)).data.ownerUid == request.auth.uid
+          && request.resource.data.keys().hasAll(['dataUrl', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['dataUrl', 'updatedAt'])
+          && request.resource.data.dataUrl is string
+          && request.resource.data.dataUrl.size() <= 220000
+          && request.resource.data.dataUrl.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}')
           && request.resource.data.updatedAt == request.time;
         allow delete: if ownsBike(bikeId);
       }

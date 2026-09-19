@@ -1,4 +1,5 @@
 // Shared by the no-build browser UI and emulator integration tests.
+import { validPhoto } from "./bike-photo.js";
 export const BIKE_TYPES = [
   "Hybrid",
   "Road",
@@ -49,7 +50,7 @@ export function bikeInput(input) {
       published,
     },
     private: {
-      serialNumber: clean(input.serialNumber, "Serial number", 80, true),
+      serialNumber: clean(input.serialNumber, "Serial number", 80),
       notes: clean(input.notes, "Private notes", 1000),
     },
   };
@@ -103,9 +104,19 @@ export function createBikeStore({ db, auth, firestore: f }) {
       return result.exists() ? result.data() : { serialNumber: "", notes: "" };
     },
 
+    async photo(id) {
+      const result = await f.getDoc(f.doc(db, "bikes", id, "photos", "main"));
+      const value = result.exists() ? result.data().dataUrl : "";
+      return validPhoto(value) ? value : "";
+    },
+
     async saveBike(input, id = null) {
       const u = user(),
         data = bikeInput(input);
+      const photo = input.photoDataUrl;
+      if (photo !== undefined && photo !== null && !validPhoto(photo)) {
+        throw new Error("Choose a valid bike photo before saving.");
+      }
       const ref = id ? bikeRef(id) : f.doc(f.collection(db, "bikes"));
       await f.runTransaction(db, async (tx) => {
         const current = id ? await tx.get(ref) : null;
@@ -114,6 +125,12 @@ export function createBikeStore({ db, auth, firestore: f }) {
         const existing = current?.exists() ? current.data() : null;
         tx.set(ref, {
           ...data.public,
+          photoVersion:
+            photo === undefined
+              ? existing?.photoVersion || ""
+              : photo === null
+                ? ""
+                : crypto.randomUUID(),
           ownerUid: u.uid,
           available: existing?.available ?? true,
           activeRequestId: existing?.activeRequestId ?? "",
@@ -124,6 +141,13 @@ export function createBikeStore({ db, auth, firestore: f }) {
           ...data.private,
           updatedAt: f.serverTimestamp(),
         });
+        if (photo)
+          tx.set(f.doc(db, "bikes", ref.id, "photos", "main"), {
+            dataUrl: photo,
+            updatedAt: f.serverTimestamp(),
+          });
+        else if (photo === null && existing?.photoVersion)
+          tx.delete(f.doc(db, "bikes", ref.id, "photos", "main"));
       });
       return ref.id;
     },
@@ -147,6 +171,8 @@ export function createBikeStore({ db, auth, firestore: f }) {
             "Mark the active rental returned before removing this bike.",
           );
         tx.delete(f.doc(db, "bikes", id, "private", "details"));
+        if (snap.data().photoVersion)
+          tx.delete(f.doc(db, "bikes", id, "photos", "main"));
         tx.delete(bikeRef(id));
       });
     },

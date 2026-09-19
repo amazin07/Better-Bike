@@ -1,4 +1,9 @@
+import { preparePhoto } from "./bike-photo.js";
 const $ = (id) => document.getElementById(id);
+let selectedPhoto,
+  photoGeneration = 0,
+  photoBusy = false;
+const photoObservers = new Map();
 let client,
   user,
   privateListeners = [],
@@ -10,14 +15,12 @@ const money = (cents) =>
     cents / 100,
   );
 const date = (stamp) =>
-  stamp
-    .toDate()
-    .toLocaleDateString("en-CA", {
-      timeZone: "UTC",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  stamp.toDate().toLocaleDateString("en-CA", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 let errorMessage = (error) =>
   error.message || "Connection failed. Please reload and try again.";
 function node(tag, text, cls) {
@@ -32,6 +35,7 @@ function notice(message, error = false) {
   $("notice").className = error ? "error" : "";
 }
 function empty(id, text) {
+  photoObservers.get(id)?.disconnect();
   $(id).replaceChildren(node("p", text, "empty"));
 }
 async function busy(button, action, errorTarget) {
@@ -89,6 +93,33 @@ function illustration() {
   return svg;
 }
 function renderBikes(id, bikes, own = false) {
+  photoObservers.get(id)?.disconnect();
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries)
+      if (entry.isIntersecting) {
+        observer.unobserve(entry.target);
+        const card = entry.target,
+          ownerUid = user?.uid;
+        client.store
+          .photo(card.dataset.bikeId)
+          .then((src) => {
+            if (!src || !card.isConnected || (own && user?.uid !== ownerUid))
+              return;
+            const img = node("img", "", "bike-photo");
+            img.alt = card.dataset.photoAlt;
+            img.src = src;
+            img.onerror = () => img.replaceWith(illustration());
+            card.firstElementChild.replaceWith(img);
+          })
+          .catch(() => {
+            if (card.isConnected)
+              card.prepend(
+                node("p", "Photo unavailable. Try reloading.", "hint"),
+              );
+          });
+      }
+  });
+  photoObservers.set(id, observer);
   $(id).replaceChildren();
   if (!bikes.length)
     return empty(
@@ -173,6 +204,11 @@ function renderBikes(id, bikes, own = false) {
       );
     card.append(buttons);
     $(id).append(card);
+    if (bike.photoVersion) {
+      card.dataset.bikeId = bike.id;
+      card.dataset.photoAlt = `${bike.brand} ${bike.model}`;
+      observer.observe(card);
+    }
   }
 }
 function renderRequests(id, requests, incoming) {
@@ -241,6 +277,53 @@ function renderRequests(id, requests, incoming) {
   }
 }
 const form = $("bike-form");
+function photoPreview(src = "") {
+  $("photo-preview").hidden = !src;
+  if (src) $("photo-preview").src = src;
+  else $("photo-preview").removeAttribute("src");
+  $("remove-photo").hidden = !src;
+}
+function resetPhoto() {
+  photoGeneration++;
+  selectedPhoto = undefined;
+  photoBusy = false;
+  $("bike-photo").value = "";
+  $("photo-status").textContent = "";
+  $("next-button").disabled = false;
+  photoPreview();
+}
+$("bike-photo").onchange = async () => {
+  const file = $("bike-photo").files[0];
+  if (!file) return;
+  const generation = ++photoGeneration;
+  photoBusy = true;
+  $("next-button").disabled = true;
+  $("photo-status").textContent = "Preparing photo…";
+  try {
+    const src = await preparePhoto(file);
+    if (generation !== photoGeneration) return;
+    selectedPhoto = src;
+    photoPreview(src);
+    $("photo-status").textContent =
+      "Photo ready. Save your bike to keep this change.";
+  } catch (error) {
+    if (generation === photoGeneration) {
+      $("photo-status").textContent = error.message;
+      $("bike-photo").value = "";
+    }
+  } finally {
+    if (generation === photoGeneration) {
+      photoBusy = false;
+      $("next-button").disabled = false;
+    }
+  }
+};
+$("remove-photo").onclick = () => {
+  resetPhoto();
+  selectedPhoto = null;
+  $("photo-status").textContent = "Photo will be removed when you save.";
+};
+$("bike-dialog").addEventListener("close", resetPhoto);
 function listingFields() {
   const published = form.elements.published.checked;
   $("listing-fields").hidden = !published;
@@ -276,10 +359,17 @@ async function openBike(bike = null) {
     return;
   }
   const uid = user.uid;
-  const details = bike ? await client.store.privateDetails(bike.id) : null;
+  const [details, photo] = bike
+    ? await Promise.all([
+        client.store.privateDetails(bike.id),
+        bike.photoVersion ? client.store.photo(bike.id) : "",
+      ])
+    : [null, ""];
   if (user?.uid !== uid) return;
   editing = bike?.id || null;
   form.reset();
+  resetPhoto();
+  photoPreview(photo);
   if (bike) {
     for (const [key, value] of Object.entries({
       ...bike,
@@ -305,6 +395,7 @@ async function openBike(bike = null) {
 $("register-button").onclick = () =>
   busy($("register-button"), () => openBike());
 $("next-button").onclick = () => {
+  if (photoBusy) return;
   if (form.reportValidity()) {
     step(true);
     form.elements.published.focus();
@@ -316,6 +407,7 @@ $("back-button").onclick = () => {
 };
 form.onsubmit = (event) => {
   event.preventDefault();
+  if (photoBusy) return;
   if ($("listing-step").hidden) {
     $("next-button").click();
     return;
@@ -329,6 +421,7 @@ form.onsubmit = (event) => {
         if (field.name)
           input[field.name] =
             field.type === "checkbox" ? field.checked : field.value;
+      input.photoDataUrl = selectedPhoto;
       await client.store.saveBike(input, editing);
       $("bike-dialog").close();
       tab("mine");
@@ -400,6 +493,7 @@ async function start() {
       for (const dialog of document.querySelectorAll("dialog[open]"))
         dialog.close();
       form.reset();
+      resetPhoto();
       $("request-form").reset();
       editing = requestedBike = null;
       renderBikes("listings", listings);
