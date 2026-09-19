@@ -1,0 +1,1544 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#F7F7F5" />
+    <meta
+      name="description"
+      content="Compare downtown Toronto bike routes using recorded cyclist collision history, your riding confidence, and the time you ride."
+    />
+    <title>Safer Ride · Toronto</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2314467D'/%3E%3Cpath d='M22 8H14a5 5 0 000 10h4a3 3 0 010 6H10' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <style>
+      :root {
+        --paper: #f7f7f5;
+        --ink: #1a1d21;
+        --muted: #6b7178;
+        --blue: #14467d;
+        --red: #c1272d;
+        --line: #e3e3df;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.55;
+      }
+      button,
+      a,
+      input {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      #map {
+        position: fixed;
+        inset: 0;
+        background: #e9eeeb;
+        z-index: 0;
+      }
+      .leaflet-container {
+        font-family: inherit;
+      }
+      .leaflet-control-attribution {
+        font-size: 10px !important;
+      }
+      .leaflet-bar {
+        border: 1px solid var(--line) !important;
+        border-radius: 2px !important;
+        box-shadow: none !important;
+      }
+      .leaflet-bar a {
+        color: var(--ink) !important;
+      }
+      .leaflet-control-zoom {
+        margin-right: 24px !important;
+        margin-bottom: 48px !important;
+      }
+      .panel {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        position: absolute;
+        z-index: 500;
+      }
+      .controls {
+        top: 24px;
+        left: 24px;
+        width: 340px;
+      }
+      .brand {
+        padding: 24px 24px 21px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand svg {
+        color: var(--blue);
+      }
+      h1 {
+        font-size: 24px;
+        letter-spacing: -0.8px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .city {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+        border-left: 1px solid var(--line);
+        padding-left: 12px;
+      }
+      .tagline {
+        margin: 9px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .section {
+        padding: 21px 24px;
+      }
+      .section + .section {
+        border-top: 1px solid var(--line);
+      }
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 15px;
+      }
+      h2 {
+        font-size: 14px;
+        font-weight: 500;
+        margin: 0;
+      }
+      .quiet-button {
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 12px;
+        padding: 4px 0;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .quiet-button:hover {
+        color: var(--blue);
+      }
+      .places {
+        position: relative;
+      }
+      .place-row {
+        display: grid;
+        grid-template-columns: 14px 1fr;
+        gap: 12px;
+        align-items: center;
+        margin: 10px 0;
+      }
+      .place-dot {
+        height: 9px;
+        width: 9px;
+        border-radius: 50%;
+        background: var(--blue);
+        margin-left: 2px;
+      }
+      .place-dot.end {
+        background: white;
+        border: 2px solid var(--blue);
+      }
+      .input-wrap {
+        position: relative;
+      }
+      .input-wrap label {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        margin-bottom: 3px;
+      }
+      .place-input {
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        padding: 0 24px 8px 0;
+        width: 100%;
+        color: var(--ink);
+        background: transparent;
+        font-size: 13px;
+        outline-offset: 0;
+      }
+      .place-input::placeholder {
+        color: #92979b;
+      }
+      .search-icon {
+        position: absolute;
+        right: 0;
+        bottom: 10px;
+        color: var(--muted);
+      }
+      .suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 800;
+        background: white;
+        border: 1px solid var(--line);
+        max-height: 230px;
+        overflow: auto;
+      }
+      .suggestions button {
+        display: block;
+        text-align: left;
+        width: 100%;
+        padding: 10px 12px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: white;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .suggestions button:hover,
+      .suggestions button:focus {
+        background: #edf2f7;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        margin: 14px 0 0;
+      }
+      .rider-levels {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .rider-levels button {
+        border: 0;
+        border-right: 1px solid var(--line);
+        background: white;
+        color: var(--muted);
+        min-height: 54px;
+        padding: 8px 4px;
+        font-size: 12px;
+        line-height: 1.3;
+      }
+      .rider-levels button:last-child {
+        border: 0;
+      }
+      .rider-levels button[aria-pressed="true"] {
+        background: var(--blue);
+        color: white;
+      }
+      .rider-copy {
+        font-size: 12px;
+        color: var(--muted);
+        min-height: 32px;
+        margin: 11px 0 0;
+        line-height: 1.5;
+      }
+      .time-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .hour-display {
+        font-size: 26px;
+        font-weight: 500;
+        letter-spacing: -1px;
+        color: var(--blue);
+      }
+      .time-label {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 3px 0 0;
+      }
+      .slider-wrap {
+        margin-top: 20px;
+      }
+      input[type="range"] {
+        width: 100%;
+        margin: 0;
+        accent-color: var(--blue);
+        cursor: ew-resize;
+        height: 20px;
+      }
+      .time-ticks {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 10px;
+        margin-top: 6px;
+      }
+      .controls-footer {
+        padding: 14px 24px;
+        background: #fafaf9;
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .status-dot {
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--blue);
+        margin-right: 6px;
+      }
+      .controls-footer a {
+        color: inherit;
+        text-underline-offset: 3px;
+      }
+      .comparison {
+        top: 24px;
+        right: 24px;
+        width: 300px;
+      }
+      .comparison-header {
+        padding: 19px 22px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .comparison-header span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .empty {
+        padding: 26px 22px 25px;
+      }
+      .empty svg {
+        color: #8b9aab;
+        margin-bottom: 14px;
+      }
+      .empty h3 {
+        font-weight: 500;
+        font-size: 20px;
+        letter-spacing: -0.3px;
+        margin: 0 0 12px;
+      }
+      .empty p {
+        color: var(--muted);
+        line-height: 1.65;
+        font-size: 13px;
+        margin: 0 0 18px;
+      }
+      .example-button {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        color: var(--blue);
+        padding: 10px 12px;
+        width: 100%;
+        font-size: 12px;
+        text-align: left;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .example-button:hover {
+        border-color: var(--blue);
+      }
+      .route-card {
+        padding: 19px 22px 21px;
+      }
+      .route-card + .route-card {
+        border-top: 1px solid var(--line);
+      }
+      .route-card.your-route {
+        background: #f4f7fa;
+      }
+      .route-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .route-title .line {
+        width: 22px;
+        border-top: 3px dashed #8a9299;
+      }
+      .your-route .route-title {
+        color: var(--blue);
+      }
+      .your-route .line {
+        border-top: 3px solid var(--blue);
+      }
+      .route-metrics {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 7px;
+      }
+      .big-number {
+        font-size: 64px;
+        line-height: 1.05;
+        font-weight: 600;
+        letter-spacing: -3px;
+        margin: 17px 0 4px;
+      }
+      .your-route .big-number {
+        color: var(--blue);
+      }
+      .number-caption {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+      .delta {
+        padding: 17px 22px;
+        font-size: 15px;
+        line-height: 1.5;
+        border-top: 1px solid var(--line);
+        color: var(--blue);
+      }
+      .comparison-note {
+        padding: 14px 22px 17px;
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.6;
+        border-top: 1px solid var(--line);
+      }
+      .error {
+        padding: 23px 22px;
+        color: var(--ink);
+        line-height: 1.6;
+      }
+      .skeleton {
+        padding: 22px;
+      }
+      .skeleton-block {
+        height: 16px;
+        background: #eff0ed;
+        margin-bottom: 12px;
+        animation: pulse 1.2s infinite alternate;
+      }
+      .skeleton-block.big {
+        height: 75px;
+        width: 45%;
+        margin-top: 25px;
+      }
+      .skeleton-block.short {
+        width: 70%;
+      }
+      @keyframes pulse {
+        to {
+          opacity: 0.4;
+        }
+      }
+      .legend {
+        bottom: 28px;
+        left: 24px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .legend-stain {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(193, 39, 45, 0.3);
+      }
+      .legend-direct {
+        width: 23px;
+        border-top: 3px dashed #8a9299;
+      }
+      .legend-safer {
+        width: 23px;
+        border-top: 3px solid var(--blue);
+      }
+      .map-notice {
+        position: absolute;
+        bottom: 84px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 500;
+        background: white;
+        border: 1px solid var(--line);
+        padding: 10px 16px;
+        font-size: 12px;
+        color: var(--muted);
+        max-width: 350px;
+      }
+      .map-pin {
+        border: 3px solid white;
+        border-radius: 50%;
+        background: var(--blue);
+        box-shadow: 0 0 0 1px var(--blue);
+        width: 14px !important;
+        height: 14px !important;
+      }
+      .map-pin.destination {
+        background: var(--ink);
+        box-shadow: 0 0 0 1px var(--ink);
+      }
+      .safer-path {
+        animation: route-reveal 0.25s ease-out;
+      }
+      @keyframes route-reveal {
+        from {
+          stroke-opacity: 0;
+          stroke-width: 10;
+        }
+        to {
+          stroke-opacity: 1;
+          stroke-width: 6;
+        }
+      }
+      .coverage-label {
+        color: var(--muted);
+      }
+      .leaflet-tooltip {
+        box-shadow: none;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        font-size: 11px;
+      }
+      .mobile-toggle {
+        display: none;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (min-width: 761px) and (max-height: 760px) {
+        .brand {
+          padding: 17px 22px;
+        }
+        .section {
+          padding: 15px 22px;
+        }
+        .controls {
+          top: 18px;
+          left: 18px;
+        }
+        .comparison {
+          top: 18px;
+          right: 18px;
+        }
+        .rider-copy {
+          min-height: 18px;
+        }
+        .big-number {
+          font-size: 55px;
+        }
+        .legend {
+          bottom: 24px;
+          left: 18px;
+        }
+      }
+      @media (max-width: 1050px) and (min-width: 761px) {
+        .controls {
+          width: 305px;
+        }
+        .comparison {
+          width: 260px;
+        }
+        .brand,
+        .section {
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+        .legend {
+          gap: 12px;
+        }
+      }
+      @media (max-width: 760px) {
+        .controls {
+          top: 12px;
+          left: 12px;
+          right: 12px;
+          width: auto;
+        }
+        .brand {
+          padding: 13px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .brand-line {
+          gap: 8px;
+        }
+        h1 {
+          font-size: 21px;
+        }
+        .city {
+          margin-left: 8px;
+        }
+        .tagline {
+          display: none;
+        }
+        .mobile-toggle {
+          display: block;
+          border: 0;
+          background: var(--paper);
+          color: var(--blue);
+          padding: 6px 10px;
+          font-size: 12px;
+        }
+        .section {
+          padding: 13px 16px;
+        }
+        .section-heading {
+          margin-bottom: 8px;
+        }
+        .places {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+        .place-row {
+          margin: 3px 0;
+          gap: 6px;
+          grid-template-columns: 10px 1fr;
+        }
+        .place-input {
+          font-size: 12px;
+        }
+        .hint {
+          margin-top: 8px;
+          font-size: 11px;
+        }
+        .preferences {
+          display: grid;
+          grid-template-columns: 1.12fr 1fr;
+        }
+        .preferences .section {
+          border-top: 1px solid var(--line);
+        }
+        .preferences .section + .section {
+          border-left: 1px solid var(--line);
+        }
+        .rider-levels button {
+          font-size: 10px;
+          min-height: 43px;
+        }
+        .rider-copy {
+          font-size: 10px;
+          min-height: 28px;
+          margin-top: 7px;
+        }
+        .hour-display {
+          font-size: 23px;
+        }
+        .time-label {
+          font-size: 10px;
+        }
+        .slider-wrap {
+          margin-top: 14px;
+        }
+        .time-ticks {
+          font-size: 9px;
+        }
+        .controls-footer {
+          padding: 9px 16px;
+          font-size: 10px;
+        }
+        .controls.collapsed .preferences,
+        .controls.collapsed .controls-footer {
+          display: none;
+        }
+        .comparison {
+          top: auto;
+          bottom: 32px;
+          left: 12px;
+          right: 12px;
+          width: auto;
+        }
+        .comparison-header {
+          padding: 11px 15px;
+        }
+        .empty {
+          padding: 16px;
+        }
+        .empty svg {
+          display: none;
+        }
+        .empty h3 {
+          font-size: 18px;
+          margin-bottom: 8px;
+        }
+        .empty p {
+          font-size: 12px;
+          margin-bottom: 12px;
+        }
+        .comparison.has-result #results {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+        .route-card {
+          padding: 12px 16px;
+        }
+        .route-card + .route-card {
+          border-top: 0;
+          border-left: 1px solid var(--line);
+        }
+        .route-title {
+          font-size: 12px;
+        }
+        .route-metrics {
+          font-size: 11px;
+        }
+        .big-number {
+          font-size: 46px;
+          margin-top: 9px;
+          letter-spacing: -2px;
+        }
+        .number-caption {
+          font-size: 10px;
+        }
+        .delta {
+          grid-column: 1/-1;
+          padding: 9px 16px;
+          font-size: 13px;
+        }
+        .comparison-note {
+          grid-column: 1/-1;
+          font-size: 9px;
+          padding: 7px 16px;
+        }
+        .legend {
+          display: none;
+        }
+        .leaflet-control-zoom {
+          margin-right: 14px !important;
+          margin-bottom: 300px !important;
+        }
+        .map-notice {
+          bottom: 290px;
+          max-width: 90%;
+          width: max-content;
+          padding: 7px 12px;
+          font-size: 11px;
+        }
+        .error {
+          padding: 15px;
+        }
+        .skeleton {
+          padding: 14px;
+          display: flex;
+          gap: 14px;
+        }
+        .skeleton-block {
+          width: 50%;
+          height: 60px !important;
+          margin: 0 !important;
+        }
+        .skeleton-block.short {
+          display: none;
+        }
+      }
+      .osm-basemap {
+        filter: saturate(0.12) contrast(0.86) brightness(1.08);
+      }
+      .compact-label {
+        display: none;
+      }
+      @media (max-width: 760px) {
+        .full-label {
+          display: none;
+        }
+        .compact-label {
+          display: inline;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map" aria-label="Toronto cycling route map"></div>
+    <main>
+      <section class="panel controls" aria-label="Plan your ride">
+        <header class="brand">
+          <div>
+            <div class="brand-line">
+              <svg
+                width="27"
+                height="27"
+                viewBox="0 0 28 28"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="6.5"
+                  cy="20"
+                  r="5"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                />
+                <circle
+                  cx="21.5"
+                  cy="20"
+                  r="5"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                />
+                <path
+                  d="m6.5 20 6-11 9 11M6.5 20h10l-6-14H7m5.5 3h7l-2-4h-3"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <h1>Safer Ride</h1>
+              <span class="city">Toronto</span>
+            </div>
+            <p class="tagline">A little more time. A different way home.</p>
+          </div>
+          <button
+            class="mobile-toggle"
+            id="toggle"
+            aria-expanded="true"
+            aria-controls="preferences"
+          >
+            Less
+          </button>
+        </header>
+        <section class="section">
+          <div class="section-heading">
+            <h2>Where are you riding?</h2>
+            <button class="quiet-button" id="reset">Reset</button>
+          </div>
+          <div class="places">
+            <div class="place-row">
+              <span class="place-dot" aria-hidden="true"></span>
+              <div class="input-wrap">
+                <label for="origin">From</label
+                ><input
+                  class="place-input"
+                  id="origin"
+                  autocomplete="off"
+                  placeholder="Click map or search"
+                  aria-controls="origin-results"
+                  aria-expanded="false"
+                /><span class="search-icon" aria-hidden="true">⌕</span>
+                <div class="suggestions" id="origin-results" hidden></div>
+              </div>
+            </div>
+            <div class="place-row">
+              <span class="place-dot end" aria-hidden="true"></span>
+              <div class="input-wrap">
+                <label for="destination">To</label
+                ><input
+                  class="place-input"
+                  id="destination"
+                  autocomplete="off"
+                  placeholder="Click map or search"
+                  aria-controls="destination-results"
+                  aria-expanded="false"
+                /><span class="search-icon" aria-hidden="true">⌕</span>
+                <div class="suggestions" id="destination-results" hidden></div>
+              </div>
+            </div>
+          </div>
+          <p class="hint" id="map-hint" role="status">
+            Click the map to set a starting point.
+          </p>
+        </section>
+        <div class="preferences" id="preferences">
+          <section class="section">
+            <div class="section-heading"><h2>Your riding style</h2></div>
+            <div
+              class="rider-levels"
+              role="group"
+              aria-label="Rider confidence"
+            >
+              <button
+                data-level="1"
+                aria-pressed="false"
+                aria-label="New to city riding"
+              >
+                <span class="full-label">New to<br />city riding</span
+                ><span class="compact-label">New rider</span>
+              </button>
+              <button
+                data-level="2"
+                aria-pressed="true"
+                aria-label="Comfortable"
+              >
+                Comfortable
+              </button>
+              <button
+                data-level="3"
+                aria-pressed="false"
+                aria-label="Confident commuter"
+              >
+                Confident<br />commuter
+              </button>
+            </div>
+            <p class="rider-copy" id="rider-copy">
+              Balance calm streets against time.
+            </p>
+          </section>
+          <section class="section">
+            <div class="time-header">
+              <div>
+                <h2><label for="hour">Time of day</label></h2>
+                <p class="time-label">When will you ride?</p>
+              </div>
+              <output class="hour-display" id="hour-display" for="hour"
+                >8am</output
+              >
+            </div>
+            <div class="slider-wrap">
+              <input
+                type="range"
+                id="hour"
+                min="0"
+                max="23"
+                value="8"
+                aria-valuetext="8am"
+              />
+              <div class="time-ticks" aria-hidden="true">
+                <span>12am</span><span>6am</span><span>12pm</span
+                ><span>6pm</span><span>11pm</span>
+              </div>
+            </div>
+          </section>
+        </div>
+        <footer class="controls-footer">
+          <span
+            ><span class="status-dot"></span
+            ><span id="data-years">Toronto collision records</span></span
+          ><a
+            href="https://open.toronto.ca/dataset/motor-vehicle-collisions-involving-killed-or-seriously-injured-persons/"
+            target="_blank"
+            rel="noopener"
+            >Data source ↗</a
+          >
+        </footer>
+      </section>
+      <aside
+        class="panel comparison"
+        id="comparison"
+        aria-label="Route comparison"
+        aria-live="polite"
+        aria-busy="false"
+      >
+        <header class="comparison-header">
+          <h2>Your ride, compared</h2>
+          <span id="comparison-hour">At 8am</span>
+        </header>
+        <div class="empty" id="empty">
+          <svg
+            width="38"
+            height="38"
+            viewBox="0 0 38 38"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle
+              cx="9"
+              cy="8"
+              r="4"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <circle
+              cx="29"
+              cy="30"
+              r="4"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M9 12v8a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5v-7a5 5 0 0 0-5-5h-5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-dasharray="3 3"
+            />
+          </svg>
+          <h3>Every route has a history.</h3>
+          <p>
+            See the recorded cyclist collisions along two ways to get there.
+            Choose your points on the map to begin.
+          </p>
+          <button class="example-button" id="example">
+            Try Kensington → Christie Pits <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+        <div
+          class="skeleton"
+          id="loading"
+          aria-label="Calculating routes"
+          hidden
+        >
+          <div class="skeleton-block"></div>
+          <div class="skeleton-block big"></div>
+          <div class="skeleton-block short"></div>
+          <div class="skeleton-block big"></div>
+        </div>
+        <div id="results" hidden>
+          <section class="route-card">
+            <div class="route-title">
+              <span class="line" aria-hidden="true"></span>Direct route
+            </div>
+            <div class="route-metrics" id="direct-metrics"></div>
+            <div class="big-number" id="direct-count"></div>
+            <div class="number-caption">
+              recorded cyclist KSI collisions<br />along this path
+            </div>
+          </section>
+          <section class="route-card your-route">
+            <div class="route-title">
+              <span class="line" aria-hidden="true"></span>Your route
+            </div>
+            <div class="route-metrics" id="safer-metrics"></div>
+            <div class="big-number" id="safer-count"></div>
+            <div class="number-caption">
+              recorded cyclist KSI collisions<br />along this path
+            </div>
+          </section>
+          <div class="delta" id="delta"></div>
+          <div class="comparison-note">
+            KSI = killed or seriously injured. Counts are distinct reported
+            collisions, across
+            <span id="record-years">all recorded years</span>. Time changes
+            route weighting; counts show the full history.
+          </div>
+        </div>
+        <div class="error" id="error" role="status" hidden></div>
+      </aside>
+    </main>
+    <aside class="panel legend" aria-label="Map legend">
+      <span class="legend-item"
+        ><span class="legend-stain"></span>Recorded collision</span
+      ><span class="legend-item"
+        ><span class="legend-direct"></span>Direct route</span
+      ><span class="legend-item"
+        ><span class="legend-safer"></span>Your route</span
+      >
+    </aside>
+    <div class="map-notice" id="map-notice" role="status" hidden></div>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const state = {
+        origin: null,
+        destination: null,
+        level: 2,
+        hour: 8,
+        markers: [],
+        routes: [],
+        points: [],
+        request: 0,
+        controller: null,
+      };
+      let map, collisionLayer, routeTimer;
+      const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
+      const reducedMotion = matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      function notice(message) {
+        $("map-notice").textContent = message;
+        $("map-notice").hidden = !message;
+      }
+      function show(which, message = "") {
+        for (const id of ["empty", "loading", "results", "error"])
+          $(id).hidden = id !== which;
+        $("comparison").classList.toggle("has-result", which === "results");
+        $("comparison").setAttribute("aria-busy", String(which === "loading"));
+        if (message) $("error").textContent = message;
+      }
+      function clearRoutes() {
+        state.routes.forEach((layer) => map.removeLayer(layer));
+        state.routes = [];
+      }
+      function cancelRoute() {
+        clearTimeout(routeTimer);
+        state.controller?.abort();
+        state.request++;
+      }
+      function drawMarkers() {
+        state.markers.forEach((layer) => map.removeLayer(layer));
+        state.markers = [];
+        for (const key of ["origin", "destination"])
+          if (state[key])
+            state.markers.push(
+              L.marker(state[key], {
+                icon: L.divIcon({
+                  className: `map-pin ${key}`,
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+                }),
+                title: key === "origin" ? "Starting point" : "Destination",
+                alt: key === "origin" ? "Starting point" : "Destination",
+                zIndexOffset: 1000,
+              }).addTo(map),
+            );
+      }
+      function updateHint() {
+        $("map-hint").textContent = !state.origin
+          ? "Click the map to set a starting point."
+          : !state.destination
+            ? "Now click the map to set your destination."
+            : "Click again to start a new route.";
+      }
+      function setPoint(key, coordinate, label) {
+        cancelRoute();
+        clearRoutes();
+        state[key] = coordinate;
+        $(key).value =
+          label || `${coordinate[0].toFixed(4)}, ${coordinate[1].toFixed(4)}`;
+        drawMarkers();
+        updateHint();
+        if (state.origin && state.destination) getRoute(true);
+        else show("empty");
+      }
+      function reset() {
+        cancelRoute();
+        clearRoutes();
+        state.origin = null;
+        state.destination = null;
+        $("origin").value = "";
+        $("destination").value = "";
+        drawMarkers();
+        updateHint();
+        show("empty");
+      }
+      function renderCollisions() {
+        if (!map) return;
+        collisionLayer.clearLayers();
+        const bounds = map.getBounds();
+        for (const point of state.points) {
+          if (!bounds.contains([point.lat, point.lng])) continue;
+          L.circleMarker([point.lat, point.lng], {
+            pane: "collisions",
+            radius: point.severity === "fatal" ? 7 : 4,
+            stroke: false,
+            fillColor: "#C1272D",
+            fillOpacity: 0.18,
+          })
+            .bindTooltip(
+              `${Number(point.year)} · ${point.severity === "fatal" ? "Fatal" : "Serious injury"}`,
+              { direction: "top" },
+            )
+            .addTo(collisionLayer);
+        }
+      }
+      function applyMetadata(metadata) {
+        if (metadata?.years) {
+          const years = metadata.years.join("–");
+          $("data-years").textContent = `Toronto · ${years}`;
+          $("record-years").textContent = years;
+        }
+      }
+      async function getRoute(fit = false) {
+        if (!state.origin || !state.destination) return;
+        cancelRoute();
+        const request = state.request;
+        state.controller = new AbortController();
+        show("loading");
+        $("comparison-hour").textContent = `At ${hourLabel(state.hour)}`;
+        const timer = setTimeout(() => {
+          if (request === state.request) state.controller.abort("timeout");
+        }, 20000);
+        try {
+          const response = await fetch("/api/route", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              origin: state.origin,
+              destination: state.destination,
+              level: state.level,
+              hour: state.hour,
+              city: "toronto",
+            }),
+            signal: state.controller.signal,
+          });
+          const data = await response.json();
+          if (request !== state.request) return;
+          if (!response.ok)
+            throw new Error(
+              data.error || "Routing is unavailable. Please try again.",
+            );
+          clearRoutes();
+          state.routes.push(
+            L.geoJSON(data.direct.geometry, {
+              pane: "direct",
+              style: {
+                color: "#8A9299",
+                weight: 4,
+                dashArray: "6 6",
+                opacity: 0.7,
+              },
+            }).addTo(map),
+          );
+          const safer = L.geoJSON(data.safer.geometry, {
+            pane: "safer",
+            style: {
+              color: "#14467D",
+              weight: 6,
+              opacity: 1,
+              lineCap: "round",
+              lineJoin: "round",
+              className: "safer-path",
+            },
+          }).addTo(map);
+          state.routes.push(safer);
+          // Place pins at the actual street nodes used by the router.
+          state.markers[0]?.setLatLng(data.snapped.origin);
+          state.markers[1]?.setLatLng(data.snapped.destination);
+          for (const key of ["direct", "safer"]) {
+            $(`${key}-metrics`).textContent =
+              `${(data[key].distance_m / 1000).toFixed(1)} km · ${Math.round(data[key].duration_s / 60)} min`;
+            $(`${key}-count`).textContent =
+              data[key].ksi_total.toLocaleString();
+          }
+          const seconds = data.safer.duration_s - data.direct.duration_s;
+          const minutes = Math.round(seconds / 60);
+          const time =
+            seconds === 0
+              ? "Same riding time"
+              : Math.abs(seconds) < 60
+                ? `<1 min ${seconds > 0 ? "extra" : "quicker"}`
+              : `${minutes > 0 ? "+" : "−"}${Math.abs(minutes)} min`;
+          const direct = data.direct.ksi_total,
+            saferCount = data.safer.ksi_total;
+          let difference = "Same recorded collision count";
+          if (direct > 0 && saferCount !== direct)
+            difference = `${Math.round((Math.abs(direct - saferCount) / direct) * 100)}% ${saferCount < direct ? "fewer" : "more"} recorded collisions`;
+          else if (direct === 0 && saferCount > 0)
+            difference = `${saferCount} more recorded collision${saferCount === 1 ? "" : "s"}`;
+          else if (direct === 0)
+            difference = "No recorded collisions on either path";
+          $("delta").textContent = `${time} · ${difference}`;
+          show("results");
+          applyMetadata(data.metadata);
+          if (fit) {
+            const bounds = L.featureGroup(state.routes).getBounds();
+            if (innerWidth > 760)
+              map.fitBounds(bounds, {
+                paddingTopLeft: [
+                  document.querySelector(".controls").offsetWidth + 50,
+                  60,
+                ],
+                paddingBottomRight: [
+                  document.querySelector(".comparison").offsetWidth + 50,
+                  100,
+                ],
+                maxZoom: 16,
+                animate: !reducedMotion,
+              });
+            else {
+              document.querySelector(".controls").classList.add("collapsed");
+              $("toggle").textContent = "More";
+              $("toggle").setAttribute("aria-expanded", "false");
+              map.fitBounds(bounds, {
+                paddingTopLeft: [30, 220],
+                paddingBottomRight: [30, 300],
+                maxZoom: 15,
+                animate: !reducedMotion,
+              });
+            }
+          }
+        } catch (error) {
+          if (request !== state.request) return;
+          clearRoutes();
+          show(
+            "error",
+            error.name === "TypeError" || state.controller.signal.aborted
+              ? "Routing is unavailable. The collision map is still shown below."
+              : error.message,
+          );
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      function reroute() {
+        cancelRoute();
+        clearRoutes();
+        if (state.origin && state.destination) {
+          show("loading");
+          routeTimer = setTimeout(() => getRoute(), 140);
+        }
+      }
+      async function init() {
+        if (!window.L) {
+          show(
+            "error",
+            "The map could not load. Check your internet connection and refresh.",
+          );
+          return;
+        }
+        map = L.map("map", {
+          zoomControl: false,
+          minZoom: 11,
+          maxZoom: 19,
+        }).setView([43.66, -79.389], 14);
+        if (innerWidth <= 760 && innerHeight < 740) {
+          document.querySelector(".controls").classList.add("collapsed");
+          $("toggle").textContent = "More";
+          $("toggle").setAttribute("aria-expanded", "false");
+        }
+        L.control.zoom({ position: "bottomright" }).addTo(map);
+        let tileErrors = 0;
+        let cartoKey = "";
+        try {
+          const config = await fetch("/api/config");
+          if (config.ok) cartoKey = (await config.json()).carto_key;
+        } catch {}
+        const tileUrl = cartoKey
+          ? `https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(cartoKey)}`
+          : "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+        L.tileLayer(tileUrl, {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' +
+            (cartoKey
+              ? ' &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              : ""),
+          subdomains: "abcd",
+          maxZoom: cartoKey ? 20 : 19,
+          className: cartoKey ? "" : "osm-basemap",
+        })
+          .on("tileerror", () => {
+            if (++tileErrors === 4)
+              notice(
+                "Map tiles are unavailable. Check your internet connection.",
+              );
+          })
+          .addTo(map);
+        for (const [name, zIndex] of [
+          ["collisions", 410],
+          ["direct", 420],
+          ["safer", 430],
+        ])
+          map.createPane(name).style.zIndex = zIndex;
+        collisionLayer = L.layerGroup().addTo(map);
+        map.on("moveend", renderCollisions);
+        map.on("click", (event) => {
+          document
+            .querySelectorAll(".suggestions")
+            .forEach((el) => (el.hidden = true));
+          if (state.origin && state.destination) reset();
+          setPoint(state.origin ? "destination" : "origin", [
+            event.latlng.lat,
+            event.latlng.lng,
+          ]);
+        });
+        $("reset").addEventListener("click", reset);
+        $("example").addEventListener("click", () => {
+          reset();
+          setPoint(
+            "origin",
+            [43.6547, -79.4023],
+            "Kensington Market",
+          );
+          setPoint("destination", [43.6647, -79.4207], "Christie Pits Park");
+        });
+        document.querySelectorAll("[data-level]").forEach((button) =>
+          button.addEventListener("click", () => {
+            state.level = Number(button.dataset.level);
+            document
+              .querySelectorAll("[data-level]")
+              .forEach((b) =>
+                b.setAttribute("aria-pressed", String(b === button)),
+              );
+            $("rider-copy").textContent = {
+              1: "Quiet streets, even if it takes longer.",
+              2: "Balance calm streets against time.",
+              3: "Prioritize a shorter ride, with some weight on collision history.",
+            }[state.level];
+            reroute();
+          }),
+        );
+        $("hour").addEventListener("input", (event) => {
+          state.hour = Number(event.target.value);
+          $("hour-display").textContent = hourLabel(state.hour);
+          $("hour").setAttribute("aria-valuetext", hourLabel(state.hour));
+          $("comparison-hour").textContent = `At ${hourLabel(state.hour)}`;
+          reroute();
+        });
+        $("toggle").addEventListener("click", () => {
+          const collapsed = document
+            .querySelector(".controls")
+            .classList.toggle("collapsed");
+          $("toggle").textContent = collapsed ? "More" : "Less";
+          $("toggle").setAttribute("aria-expanded", String(!collapsed));
+        });
+        for (const key of ["origin", "destination"]) {
+          const input = $(key),
+            list = $(`${key}-results`);
+          let timer,
+            version = 0;
+          async function search() {
+            const current = ++version;
+            try {
+              const response = await fetch(
+                `/api/places?q=${encodeURIComponent(input.value)}`,
+              );
+              if (!response.ok) throw new Error();
+              const places = await response.json();
+              if (current !== version) return;
+              list.replaceChildren();
+              for (const place of places) {
+                const button = document.createElement("button");
+                button.textContent = place.label;
+                button.addEventListener("click", () => {
+                  version++;
+                  setPoint(key, place.coordinate, place.label);
+                  list.hidden = true;
+                  input.setAttribute("aria-expanded", "false");
+                });
+                list.appendChild(button);
+              }
+              list.hidden = !places.length;
+              input.setAttribute("aria-expanded", String(places.length > 0));
+            } catch {
+              list.hidden = true;
+              notice("Place search is unavailable. Choose points on the map.");
+            }
+          }
+          input.addEventListener("input", () => {
+            version++;
+            clearTimeout(timer);
+            if (state[key]) {
+              cancelRoute();
+              clearRoutes();
+              state[key] = null;
+              drawMarkers();
+              updateHint();
+              show("empty");
+            }
+            timer = setTimeout(search, 180);
+          });
+          input.addEventListener("focus", () => {
+            if (!input.value) search();
+          });
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+              version++;
+              list.hidden = true;
+              input.setAttribute("aria-expanded", "false");
+            }
+            if (event.key === "ArrowDown" || event.key === "Enter") {
+              const first = list.querySelector("button");
+              if (first && !list.hidden) {
+                event.preventDefault();
+                first.focus();
+                if (event.key === "Enter") first.click();
+              }
+            }
+          });
+          input.addEventListener("blur", () =>
+            setTimeout(() => {
+              if (!list.contains(document.activeElement)) {
+                version++;
+                list.hidden = true;
+                input.setAttribute("aria-expanded", "false");
+              }
+            }, 150),
+          );
+        }
+        try {
+          const response = await fetch("/static/collisions.json");
+          if (!response.ok) throw new Error();
+          const data = await response.json();
+          state.points = data.risk_points;
+          applyMetadata(data.metadata);
+          renderCollisions();
+          if (data.metadata.bounds)
+            L.rectangle(data.metadata.bounds, {
+              color: "#8a9299",
+              weight: 1,
+              opacity: 0.45,
+              fill: false,
+              dashArray: "3 6",
+              interactive: false,
+            }).addTo(map);
+        } catch {
+          notice(
+            "Collision data is unavailable. Run the data setup before your ride.",
+          );
+        }
+        try {
+          const health = await fetch("/api/health");
+          if (!health.ok)
+            show(
+              "error",
+              "Routing is unavailable. The collision map is still shown below.",
+            );
+        } catch {
+          show(
+            "error",
+            "Routing is unavailable. The collision map is still shown below.",
+          );
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>

@@ -19,7 +19,8 @@ turn-by-turn navigation, or real payments. Never fabricate collision statistics.
 - Source spec: `docs/safer-ride-spec.md`. Follow its light civic design, palette,
   IBM Plex Sans, quiet flat panels, and prominent comparison counts.
 - The current Toronto CSV has **changed schema**: `collision_id` replaces
-  `ACCNUM`; `accdate` contains date and time; `cyclist` uses `true`/`false`.
+  `ACCNUM`; `accdate` contains date and time; `cyclist` uses `true`/`false`;
+  fatal severity is `Fatal Injury` (legacy: `Fatal`).
   Support these and the legacy uppercase fields / Yes flags. Group involved
   persons by collision ID, keep a group if any row flags cyclist involvement,
   and preserve fatal severity if any row reports it.
@@ -37,6 +38,11 @@ turn-by-turn navigation, or real payments. Never fabricate collision statistics.
 - Preserve actual OSM edge geometry and direction, including parallel edges.
 - Do not promise the weighted route always reduces raw counts; show actual
   differences honestly, including ties, increases, and zero baselines.
+- The exact supplied lane discounts can dominate the injury signal on real
+  Toronto routes. Preserve honest output and consult the README model notes
+  before changing this weighting.
+- CARTO now requires a basemap API key. `CARTO_BASEMAP_KEY` enables Positron;
+  without it the website uses a muted OpenStreetMap fallback. Never commit keys.
 - Keep README limitations visible to developers. Current City guidance says
   serious-injury reporting can lag **six months or more**, updating the spec's
   older 2–3 month estimate.
@@ -71,9 +77,11 @@ Leaflet CDN assets still need internet in the browser.
   geometry coordinate order, and multigraph edge selection.
 - Do not add optional product scope until the Toronto routing website works.
 
-## Initial handoff
+## Current handoff
 
-The repository started with only a README. The original build is in progress;
-the commands above describe the agreed layout and will work when that build is
-committed. Official datasets have been located and their current schemas
-inspected. This file is being pushed early so other agents share the same plan.
+The Toronto website, local data builder, Flask API, real collision layer, rider
+controls, hour slider, local place search, and regression tests are implemented.
+The verified local build has 12,294 nodes, 29,231 edges, and 442 cyclist KSI
+collisions in coverage (370 within 30 metres of nodes). Sources span 2006–2026.
+See README for setup and model limitations; the public map JSON is committed,
+but each teammate must run `prepare_data.py` for their local graph cache.
