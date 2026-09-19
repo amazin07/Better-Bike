@@ -146,7 +146,7 @@ class PaymentService:
         if self.clock() - payment["createdAt"] > 23 * 3600:
             raise PaymentError("This checkout needs review before it can be retried. Contact the site team.")
         base, identifier = payment["baseUrl"], payment["requestId"]
-        return self.gateway.create({
+        params = {
             "mode": "payment", "integration_identifier": payment["integrationIdentifier"],
             "payment_intent_data": {"application_fee_amount": 0,
                                     "transfer_data": {"destination": payment["connectedAccountId"]}},
@@ -158,7 +158,19 @@ class PaymentService:
             }}],
             "success_url": base + "/rentals?checkout=success&request_id=" + identifier,
             "cancel_url": base + "/rentals?checkout=cancelled&request_id=" + identifier,
-        }, "rental-" + payment["attemptId"])
+        }
+        try:
+            return self.gateway.create(params, "rental-" + payment["attemptId"])
+        except stripe.InvalidRequestError:
+            # A definitive rejected create made no session. Unlike a timeout,
+            # it can release the attempt safely (e.g. capability changed mid-call).
+            def reject(read, write):
+                saved = read("rentalPayments", identifier)
+                if (saved and saved["attemptId"] == payment["attemptId"]
+                    and saved["status"] == "creating" and not saved["sessionId"]):
+                    write("rentalPayments", identifier, {**saved, "status": "failed", "updatedAt": int(self.clock())})
+            self.repo.run(reject)
+            raise PaymentError("Stripe could not start checkout. Ask the owner to check Stripe setup, then retry.", 409) from None
 
     def settle(self, session, failed=False):
         metadata = session.get("metadata") or {}

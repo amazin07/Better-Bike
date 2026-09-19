@@ -47,7 +47,8 @@ method list with dynamic methods and handles asynchronous failure explicitly.
 Server-owned Firestore payment attempts freeze price, destination, origin, and
 idempotency key before Stripe calls. Concurrent/retried requests reuse a session.
 Paid state is monotonic; old expired-attempt events cannot affect a new attempt.
-An uncertain unbound attempt older than 23 hours requires operator review rather
+A definitive Stripe rejection releases the failed attempt; network failures retain
+the idempotency key for recovery. An uncertain unbound attempt older than 23 hours requires operator review rather
 than risking recreation outside Stripe's idempotency retention window. Check
 Stripe request logs and the attempt metadata before any manual recovery.
 
@@ -121,7 +122,7 @@ credentials or the Flask development server as production hosting.
 npm run test:firebase
 ```
 
-Verified on 2026-09-19: 129 Python tests, 20 Firestore rule/transaction tests,
+Verified on 2026-09-19: 130 Python tests, 20 Firestore rule/transaction tests,
 registration/photo/rental browser checks, and the opt-in Stripe browser smoke
 (`STRIPE_SMOKE_TEST=1 node scripts/stripe_smoke.mjs`, emulators on port 5002).
 Real sandbox API checks created owner accounts, hosted onboarding links and banner

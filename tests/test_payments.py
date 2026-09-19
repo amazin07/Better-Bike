@@ -293,3 +293,21 @@ def test_thin_webhook_verifies_signature_and_refetches_account(setup, monkeypatc
     gateway.accounts['acct_owner']['metadata']['firebaseUid'] = 'stranger'
     assert client.post('/api/stripe/connect-webhook',data=payload,headers=headers).status_code == 200
     assert ('stripeAccounts','stranger') not in repo.docs
+
+
+def test_definitive_stripe_rejection_releases_attempt_but_timeout_stays_uncertain(setup):
+    import stripe
+    repo, gateway, service = setup
+    original = gateway.create
+    def rejected(params, key):
+        raise stripe.InvalidRequestError('Capability changed', 'destination')
+    gateway.create = rejected
+    with pytest.raises(PaymentError): service.checkout('rent1', 'renter')
+    assert repo.docs['rentalPayments','rent1']['status'] == 'failed'
+    def timeout(params, key):
+        raise stripe.APIConnectionError('Timeout')
+    gateway.create = timeout
+    with pytest.raises(stripe.APIConnectionError): service.checkout('rent1', 'renter')
+    assert repo.docs['rentalPayments','rent1']['status'] == 'creating'
+    gateway.create = original
+    assert service.checkout('rent1','renter')['status'] == 'open'
